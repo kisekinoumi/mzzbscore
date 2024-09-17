@@ -53,16 +53,26 @@ for anime in anime_list:
     print(anime)
     # URL编码处理动漫名称，避免特殊字符带来的问题
     keyword_encoded = requests.utils.quote(anime.original_name.encode('utf-8'))
+    print(keyword_encoded)
 
 
     # 1. 调用 Bangumi API 搜索条目
     search_url = f"https://api.bgm.tv/search/subject/{keyword_encoded}"
+    print(search_url)
     search_params = {
         'responseGroup': 'small',
         'type': 2  # 假设我们只关注动画类型的条目
     }
     search_response = requests.get(search_url, params=search_params)
-    search_data = search_response.json()
+    if search_response.status_code == 200:
+        try:
+            search_data = search_response.json()
+        except requests.exceptions.JSONDecodeError:
+            print(f"Error decoding JSON response for {anime.original_name}")
+            search_data = {}
+    else:
+        print(f"Failed to fetch Bangumi data for {anime.original_name}, status code: {search_response.status_code}")
+        search_data = {}
 
     # 如果搜索结果包含列表且有条目
     if 'list' in search_data and search_data['list']:
