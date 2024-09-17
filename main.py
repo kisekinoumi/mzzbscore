@@ -35,7 +35,7 @@ class Anime:
 
 try:
     # 读取Excel文件，假设文件名为test.xlsx
-    file_path = 'test2.xlsx'
+    file_path = 'mzzb.xlsx'
     wb = load_workbook(file_path)
     ws = wb.active
     df = pd.read_excel(file_path)
