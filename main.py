@@ -108,17 +108,18 @@ try:
                 mal_tree = html.fromstring(mal_search_response.content)
                 try:
                     # 获取搜索结果中第一个条目的链接
-                    anime_href = mal_tree.xpath('/html/body/div[1]/div[2]/div[4]/div[2]/div[6]/table/tr[2]/td[2]/div[1]/a[1]/@href')[0]
+                    anime_href = mal_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[2]/div[6]/table/tr[2]/td[2]/div[1]/a[1]/@href')[0]
                     anime.myanilist_url = anime_href  # 存储MyAnimeList条目链接
                     mal_anime_response = requests.get(anime_href)
                     if mal_anime_response.status_code == 200:
                         mal_anime_tree = html.fromstring(mal_anime_response.content)
+                        # print(html.tostring(mal_anime_tree, pretty_print=True).decode('utf-8'))
                         # 获取评分信息
-                        anime_mal_score = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[4]/div[2]/table/tr[1]/td[2]/div[1]/table/tr[1]/td/div[1]/div[1]/div[1]/div[1]/div[1]/div/text()')
+                        anime_mal_score = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[2]/table/tr[1]/td[2]/div[1]/table/tr[1]/td/div[1]/div[1]/div[1]/div[1]/div[1]/div/text()')
                         anime_mal_score = anime_mal_score[0].strip() if anime_mal_score else 'No score found'
                         anime.score_mal = anime_mal_score  # 保存评分
                         # 获取MyAnimeList的名称
-                        myanimelist_name = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[4]/div[1]/div/div[1]/div/h1/strong/text()')
+                        myanimelist_name = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[1]/div/div[1]/div/h1/strong/text()')
                         anime.myanilist_name = myanimelist_name[0].strip() if myanimelist_name else 'No name found'
                     else:
                         anime.score_mal = 'No score found'
