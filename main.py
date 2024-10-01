@@ -84,7 +84,10 @@ try:
 
                 # 如果存在评分信息，则保存评分，否则标记为未找到评分
                 if 'rating' in subject_data and 'score' in subject_data['rating']:
-                    anime.score_bgm = subject_data['rating']['score']
+                    print('bgm的页面评分'+str(subject_data['rating']['score']))
+                    print('bgm的精确评分'+str((subject_data['rating']['count']['1']*1+subject_data['rating']['count']['2']*2+subject_data['rating']['count']['3']*3+subject_data['rating']['count']['4']*4+subject_data['rating']['count']['5']*5+subject_data['rating']['count']['6']*6+subject_data['rating']['count']['7']*7+subject_data['rating']['count']['8']*8+subject_data['rating']['count']['9']*9+subject_data['rating']['count']['10']*10)/subject_data['rating']['total']))
+                    anime.score_bgm = round((subject_data['rating']['count']['1']*1+subject_data['rating']['count']['2']*2+subject_data['rating']['count']['3']*3+subject_data['rating']['count']['4']*4+subject_data['rating']['count']['5']*5+subject_data['rating']['count']['6']*6+subject_data['rating']['count']['7']*7+subject_data['rating']['count']['8']*8+subject_data['rating']['count']['9']*9+subject_data['rating']['count']['10']*10)/subject_data['rating']['total'],2)
+                    anime.score_bgm = f"{anime.score_bgm:.2f}"
                 else:
                     anime.score_bgm = 'No score available'
                 print("bgm的评分" + str(anime.score_bgm))
