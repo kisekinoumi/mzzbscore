@@ -62,7 +62,7 @@ try:
         try:
             # 1. 调用 Bangumi API 搜索条目
             search_url = f"https://api.bgm.tv/search/subject/{keyword_encoded}"
-            print(search_url)
+            # print(search_url)
             search_params = {
                 'responseGroup': 'small',
                 'type': 2  # 假设我们只关注动画类型的条目
@@ -98,10 +98,10 @@ try:
                     anime.bangumi_total = str(subject_data['rating']['total'])
                 else:
                     anime.score_bgm = 'No score available'
-                print("bgm的评分" + str(anime.score_bgm))
-                print("bgm的条目名字" + str(anime.bangumi_name))
-                print("bgm的链接" + str(anime.bangumi_url))
-                print("bgm的评分人数" + str(anime.bangumi_total))
+                print("bgm的链接:" + str(anime.bangumi_url))
+                print("bgm的条目名字:" + str(anime.bangumi_name))
+                print("bgm的评分:" + str(anime.score_bgm))
+                print("bgm的评分人数:" + str(anime.bangumi_total))
             else:
                 anime.score_bgm = 'No results found'  # 没有搜索到结果
                 print(f"Failed to fetch Bangumi data for {anime.original_name}, status code: {search_response.status_code}")
@@ -124,36 +124,38 @@ try:
                     anime.myanilist_url = anime_href  # 存储MyAnimeList条目链接
                     mal_anime_response = requests.get(anime_href)
                     if mal_anime_response.status_code == 200:
-                        html_content = mal_anime_response.text
+                        mal_html_content = mal_anime_response.text
                         # mal_anime_tree = html.fromstring(mal_anime_response.content)
                         # print(html.tostring(mal_anime_tree, pretty_print=True).decode('utf-8'))
                         # 获取评分信息
                         # anime_mal_score = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[2]/table/tr[1]/td[2]/div[1]/table/tr[1]/td/div[1]/div[1]/div[1]/div[1]/div[1]/div/text()')
                         # anime_mal_score = anime_mal_score[0].strip() if anime_mal_score else 'No score found'
-                        anime_mal_score_match = re.search(r'<span itemprop="ratingValue" class="score-label score-\d+">([\d.]+)', html_content)
+                        anime_mal_score_match = re.search(r'<span itemprop="ratingValue" class="score-label score-\d+">([\d.]+)', mal_html_content)
                         anime_mal_score = str(anime_mal_score_match.group(1)) if anime_mal_score_match else None
                         anime.score_mal = anime_mal_score  # 保存评分
                         # 获取MyAnimeList的名称
                         # myanimelist_name = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[1]/div/div[1]/div/h1/strong/text()')
                         # anime.myanilist_name = myanimelist_name[0].strip() if myanimelist_name else 'No name found'
-                        myanimelist_name_match = re.search(r'<h1 class="title-name h1_bold_none"><strong>(.*?)</strong>', html_content)
+                        myanimelist_name_match = re.search(r'<h1 class="title-name h1_bold_none"><strong>(.*?)</strong>', mal_html_content)
                         anime.myanilist_name = str(myanimelist_name_match.group(1).strip()) if myanimelist_name_match else None
                         # 获取MyAnimeList评分人数
-                        match = re.search(r'<span itemprop="ratingCount" style="display: none">(\d+)', html_content)
-                        if match:
-                            anime.myanilist_total = str(match.group(1))
+                        mal_match = re.search(r'<span itemprop="ratingCount" style="display: none">(\d+)', mal_html_content)
+                        if mal_match:
+                            anime.myanilist_total = str(mal_match.group(1))
                         else:
                             anime.myanilist_total = 'No score found'
                     else:
                         anime.score_mal = 'No score found'
-                    print("MAL的评分: " + str(anime.score_mal))
-                    print("MAL的名称: " + str(anime.myanilist_name))
                     print("MAL的链接: " + str(anime.myanilist_url))
+                    print("MAL的名称: " + str(anime.myanilist_name))
+                    print("MAL的评分: " + str(anime.score_mal))
                     print("MAL的评分人数: " + str(anime.myanilist_total))
                 except IndexError:
                     anime.score_mal = 'No href found'  # 没有找到条目链接
+                    print(anime.score_mal)
             else:
                 anime.score_mal = 'No results found'  # 请求失败
+                print(anime.score_mal)
         except Exception as e:
             print(f"Error fetching MyAnimeList data for {anime.original_name}: {sys.exc_info()[0]}")
 
@@ -209,12 +211,13 @@ try:
                     else:
                         anime.score_al = 'No AniList results'
                         anime.popularity = 'No popularity info'
-                print("AniList的评分: " + str(anime.score_al))
-                print("AniList的名称: " + str(anime.anilist_name))
                 print("AniList的链接: " + str(anime.anilist_url))
+                print("AniList的名称: " + str(anime.anilist_name))
+                print("AniList的评分: " + str(anime.score_al))
                 print("AniList的评分人数: " + str(anime.anilist_total))
             else:
                 anime.score_al = 'Error with AniList API'  # API请求出错
+                print(anime.score_al)
         except Exception as e:
             print(f"Error fetching AniList data for {anime.original_name}: {sys.exc_info()[0]}")
 
@@ -236,12 +239,13 @@ try:
                     filmarks_total = filmarks_tree.xpath('/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[1]/div[2]/div[1]/a/span/text()')
                     print(filmarks_total)
                     anime.filmarks_total = filmarks_total[0].strip() if filmarks_total else 'No name found'
-                    print("Filmarks的评分: " + str(anime.score_fm))
-                    print("Filmarks的名称: " + str(anime.flimarks_name))
                     print("Filmarks的链接: " + str(anime.filmarks_url))
+                    print("Filmarks的名称: " + str(anime.flimarks_name))
+                    print("Filmarks的评分: " + str(anime.score_fm))
                     print("Filmarks的评分人数: " + str(anime.filmarks_total))
                 except IndexError:
                     anime.score_fm = 'No Filmarks score found'  # 没有找到评分
+                    print(anime.score_fm)
             else:
                 anime.score_fm = 'No Filmarks results'  # Filmarks请求失败
         except Exception as e:
