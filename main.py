@@ -10,11 +10,13 @@ import re
 
 # 定义 Anime 类，并增加更多的属性用于存储不同平台的数据
 class Anime:
-    def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
+    def __init__(self, original_name, score_bgm='',score_bgm_vib='',score_bgm_sd='', score_al='', score_mal='', score_fm='',
                  bangumi_url='', anilist_url='', myanilist_url='', filmarks_url='',
                  bangumi_name='', anilist_name='', myanilist_name='', flimarks_name='',bangumi_total='',anilist_total='',myanilist_total='',filmarks_total=''):
         self.original_name = original_name  # 原始名称
         self.score_bgm = score_bgm  # Bangumi评分
+        self.score_bgm_vib = score_bgm_vib  # Bangumi VIB评分
+        self.score_bgm_sd = score_bgm_sd # Bangumi标准差
         self.score_al = score_al  # AniList评分
         self.score_mal = score_mal  # MyAnimeList评分
         self.score_fm = score_fm  # Filmarks评分
@@ -92,16 +94,53 @@ try:
                 # 如果存在评分信息，则保存评分，否则标记为未找到评分
                 if 'rating' in subject_data and 'score' in subject_data['rating']:
                     print('bgm的页面评分'+str(subject_data['rating']['score']))
-                    print('bgm的精确评分'+str((subject_data['rating']['count']['1']*1+subject_data['rating']['count']['2']*2+subject_data['rating']['count']['3']*3+subject_data['rating']['count']['4']*4+subject_data['rating']['count']['5']*5+subject_data['rating']['count']['6']*6+subject_data['rating']['count']['7']*7+subject_data['rating']['count']['8']*8+subject_data['rating']['count']['9']*9+subject_data['rating']['count']['10']*10)/subject_data['rating']['total']))
-                    anime.score_bgm = round((subject_data['rating']['count']['1']*1+subject_data['rating']['count']['2']*2+subject_data['rating']['count']['3']*3+subject_data['rating']['count']['4']*4+subject_data['rating']['count']['5']*5+subject_data['rating']['count']['6']*6+subject_data['rating']['count']['7']*7+subject_data['rating']['count']['8']*8+subject_data['rating']['count']['9']*9+subject_data['rating']['count']['10']*10)/subject_data['rating']['total'],2)
+                    rating_counts = subject_data['rating']['count']
+                    total_ratings = subject_data['rating']['total']
+
+                    # 计算精确评分（平均分），保留四位小数
+                    precise_score = sum(int(score) * int(count) for score, count in rating_counts.items()) / total_ratings
+                    print('bgm的精确评分' + str(precise_score))
+                    anime.score_bgm = round(precise_score, 2)
                     anime.score_bgm = f"{anime.score_bgm:.2f}"
-                    anime.bangumi_total = str(subject_data['rating']['total'])
+                    anime.bangumi_total = str(total_ratings)
+
+                    # 计算标准差
+                    variance = sum(int(count) * (int(score) - (sum(int(score) * int(count) for score, count in rating_counts.items()) / total_ratings)) ** 2 for score, count in
+                                   rating_counts.items()) / total_ratings
+                    std_deviation = variance ** 0.5
+                    anime.score_bgm_sd = f"{round(std_deviation, 3):.3f}"  # 保留三位小数
+
+                    # --- 修改部分结束 ---
+
                 else:
                     anime.score_bgm = 'No score available'
                 print("bgm的链接:" + str(anime.bangumi_url))
                 print("bgm的条目名字:" + str(anime.bangumi_name))
                 print("bgm的评分:" + str(anime.score_bgm))
                 print("bgm的评分人数:" + str(anime.bangumi_total))
+                print("bgm的标准差:" + str(anime.score_bgm_sd))  # 打印标准差
+                try:
+                    vib_url = f"https://api.jirehlov.com/vib/{first_subject_id}"
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36 Edg/106.0.1370.42"
+                    }
+                    vib_response = requests.get(vib_url, headers=headers)
+                    vib_response.raise_for_status()  # 如果请求失败，抛出异常
+
+                    vib_data = vib_response.json()
+                    anime.score_bgm_vib = vib_data.get("VIB_score", "No VIB score available")
+                    anime.score_bgm_vib = round(float(anime.score_bgm_vib), 2)  # 保留两位小数
+                    anime.score_bgm_vib = f"{anime.score_bgm_vib:.2f}"
+                    print("bgm的VIB评分:" + str(anime.score_bgm_vib))
+
+                except requests.exceptions.RequestException as e:
+                    print(f"Error fetching VIB data for {anime.original_name}: {e}")
+                    anime.score_bgm_vib = "Error fetching VIB data"
+                except (KeyError, ValueError, TypeError) as e:
+                    print(f"Error processing VIB data for {anime.original_name}: {e}")
+                    anime.score_bgm_vib = "Error processing VIB data"
+                # --- VIB API 调用代码结束 ---
+
             else:
                 anime.score_bgm = 'No results found'  # 没有搜索到结果
                 print(f"Failed to fetch Bangumi data for {anime.original_name}, status code: {search_response.status_code}")
@@ -263,59 +302,90 @@ try:
             except ValueError:
                 current_row[3].value = None
             try:
-                current_row[4].value = float(anime.score_al) / 10 if anime.score_al not in ['No score found','No score available','No results found', 'No AniList results','Error with AniList API','', None] else None
+                current_row[4].value = float(anime.score_bgm_vib) if anime.score_bgm_vib not in ['Error processing VIB data','', None] else None
             except ValueError:
                 current_row[4].value = None
             try:
-                current_row[5].value = float(anime.anilist_total) if anime.anilist_total not in ['No score found','No score available','No results found', 'No AniList results','Error with AniList API','', None] else None
+                current_row[5].value = float(anime.score_bgm_sd) if anime.score_bgm_sd not in ['', None] else None
             except ValueError:
                 current_row[5].value = None
             try:
-                current_row[6].value = float(anime.score_mal) if anime.score_mal not in ['No href found','No score found','No score available', 'No results found', '', None] else None
+                current_row[6].value = float(anime.score_al) / 10 if anime.score_al not in ['No score found','No score available','No results found', 'No AniList results','Error with AniList API','', None] else None
             except ValueError:
                 current_row[6].value = None
             try:
-                current_row[7].value = float(anime.myanilist_total) if anime.myanilist_total not in ['No href found','No score found','No score available', 'No results found', '', None] else None
+                current_row[7].value = float(anime.anilist_total) if anime.anilist_total not in ['No score found','No score available','No results found', 'No AniList results','Error with AniList API','', None] else None
             except ValueError:
                 current_row[7].value = None
             try:
-                current_row[8].value = float(anime.score_fm) if anime.score_fm not in ['No score available', 'No results found', 'No Filmarks score found','No Filmarks results','N/A','', None] else None
+                current_row[8].value = float(anime.score_mal) if anime.score_mal not in ['No href found',
+                                                                                         'No score found',
+                                                                                         'No score available',
+                                                                                         'No results found', '',
+                                                                                         None] else None
             except ValueError:
                 current_row[8].value = None
             try:
-                current_row[9].value = float(anime.score_fm) * 2 if anime.score_fm not in ['No score available', 'No results found', 'No Filmarks score found','No Filmarks results','N/A','', None] else None
+                current_row[9].value = float(anime.myanilist_total) if anime.myanilist_total not in [
+                    'No href found', 'No score found', 'No score available', 'No results found', '', None] else None
             except ValueError:
                 current_row[9].value = None
             try:
-                current_row[10].value = anime.filmarks_total if anime.filmarks_total not in ['No score available', 'No results found', 'No Filmarks score found','No Filmarks results','N/A','', None] else None
+                current_row[10].value = float(anime.score_fm) if anime.score_fm not in ['No score available',
+                                                                                        'No results found',
+                                                                                        'No Filmarks score found',
+                                                                                        'No Filmarks results',
+                                                                                        'N/A', '', None] else None
             except ValueError:
                 current_row[10].value = None
             try:
+                current_row[11].value = float(anime.score_fm) * 2 if anime.score_fm not in ['No score available',
+                                                                                            'No results found',
+                                                                                            'No Filmarks score found',
+                                                                                            'No Filmarks results',
+                                                                                            'N/A', '',
+                                                                                            None] else None  # 保持与之前列数一致
+            except ValueError:
+                current_row[11].value = None
+            try:
+                current_row[12].value = anime.filmarks_total if anime.filmarks_total not in ['No score available',
+                                                                                             'No results found',
+                                                                                             'No Filmarks score found',
+                                                                                             'No Filmarks results',
+                                                                                             'N/A', '',
+                                                                                             None] else None  # 保持与之前列数一致
+            except ValueError:
+                current_row[12].value = None
+            try:
                 # 写入名称并设置超链接
-                current_row[13].value = anime.bangumi_name if anime.bangumi_name not in ['No name found', None] else None
+                current_row[15].value = anime.bangumi_name if anime.bangumi_name not in ['No name found',
+                                                                                         None] else None  # 由于表格修改，列数变更
                 if anime.bangumi_url:
-                    ws.cell(row=index + 2, column=14).hyperlink = anime.bangumi_url
+                    ws.cell(row=index + 2, column=16).hyperlink = anime.bangumi_url
             except Exception as e:
                 print(f"Error writing Bangumi data for {anime.original_name}: {sys.exc_info()[0]}")
             try:
-                current_row[14].value = anime.anilist_name if anime.anilist_name not in ['No name found', None] else None
+                current_row[16].value = anime.anilist_name if anime.anilist_name not in ['No name found',
+                                                                                         None] else None  # 由于表格修改，列数变更
                 if anime.anilist_url:
-                    ws.cell(row=index + 2, column=15).hyperlink = anime.anilist_url
+                    ws.cell(row=index + 2, column=17).hyperlink = anime.anilist_url
             except Exception as e:
                 print(f"Error writing AniList data for {anime.original_name}: {sys.exc_info()[0]}")
             try:
-                current_row[15].value = anime.myanilist_name if anime.myanilist_name not in ['No name found', None] else None
+                current_row[17].value = anime.myanilist_name if anime.myanilist_name not in ['No name found',
+                                                                                             None] else None  # 由于表格修改，列数变更
                 if anime.myanilist_url:
-                    ws.cell(row=index + 2, column=16).hyperlink = anime.myanilist_url
+                    ws.cell(row=index + 2, column=18).hyperlink = anime.myanilist_url
             except Exception as e:
                 print(f"Error writing MyAnimeList data for {anime.original_name}: {sys.exc_info()[0]}")
             try:
-                current_row[16].value = anime.flimarks_name if anime.flimarks_name not in ['No name found', None] else None
+                current_row[18].value = anime.flimarks_name if anime.flimarks_name not in ['No name found',
+                                                                                           None] else None  # 由于表格修改，列数变更
                 if anime.filmarks_url:
-                    ws.cell(row=index + 2, column=17).hyperlink = anime.filmarks_url
+                    ws.cell(row=index + 2, column=19).hyperlink = anime.filmarks_url
             except Exception as e:
                 print(f"Error writing Filmarks data for {anime.original_name}: {sys.exc_info()[0]}")
-    print(anime)
+        print(anime)
     # # 保存更新后的Excel文件
     # wb.save(file_path)
     # print("Excel表格已成功更新。")
