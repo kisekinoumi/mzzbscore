@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('ffi.dll', '.'), ('libcrypto-3-x64.dll', '.'), ('libssl-3-x64.dll', '.')],
+    datas=[('ffi.dll', '.'), ('libcrypto-3-x64.dll', '.'), ('libssl-3-x64.dll', '.'), ('libexpat.dll', '.'), ('_ctypes.pyd', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
