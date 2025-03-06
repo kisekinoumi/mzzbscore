@@ -1,18 +1,34 @@
+import logging
+import re
+import sys
+import time
+from urllib.parse import quote  # 明确引入quote函数
+
 import pandas as pd
 import requests
 from lxml import html
 from openpyxl import load_workbook
-import time
-import sys
-import re
+
+# 配置日志
+log_file_path = 'mzzb_score.log'
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler(log_file_path, mode='w', encoding='utf-8'),  # 'w' 覆盖模式
+                        logging.StreamHandler(sys.stdout)  # 同时输出到控制台
+                    ])
+
+# 常量定义
+MAX_RETRIES = 3
+REQUEST_TIMEOUT = 10  # 设置请求超时时间，单位为秒
 
 
-
-# 定义 Anime 类，并增加更多的属性用于存储不同平台的数据
+# Anime 类，并增加更多的属性用于存储不同平台的数据
 class Anime:
     def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
-                 bangumi_url='', anilist_url='', myanilist_url='', filmarks_url='',
-                 bangumi_name='', anilist_name='', myanilist_name='', flimarks_name='',bangumi_total='',anilist_total='',myanilist_total='',filmarks_total=''):
+                 bangumi_url='', anilist_url='', myanimelist_url='', filmarks_url='',
+                 bangumi_name='', anilist_name='', myanimelist_name='', flimarks_name='', bangumi_total='',
+                 anilist_total='', myanimelist_total='', filmarks_total=''):
         self.original_name = original_name  # 原始名称
         self.score_bgm = score_bgm  # Bangumi评分
         self.score_al = score_al  # AniList评分
@@ -20,24 +36,354 @@ class Anime:
         self.score_fm = score_fm  # Filmarks评分
         self.bangumi_url = bangumi_url  # Bangumi条目链接
         self.anilist_url = anilist_url  # AniList条目链接
-        self.myanilist_url = myanilist_url  # MyAnimeList条目链接
+        self.myanimelist_url = myanimelist_url  # MyAnimeList条目链接
         self.filmarks_url = filmarks_url  # Filmarks条目链接
         self.bangumi_name = bangumi_name  # Bangumi名称
         self.anilist_name = anilist_name  # AniList名称
-        self.myanilist_name = myanilist_name  # MyAnimeList名称
+        self.myanimelist_name = myanimelist_name  # MyAnimeList名称
         self.flimarks_name = flimarks_name  # Filmarks名称
         self.bangumi_total = bangumi_total  # Bangumi评分人数
         self.anilist_total = anilist_total # AniList评分人数
-        self.myanilist_total = myanilist_total # MyAnimeList评分人数
+        self.myanimelist_total = myanimelist_total  # MyAnimeList评分人数
         self.filmarks_total = filmarks_total # Filmarks评分人数
-
 
     def __str__(self):
         return (f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
                 f"MAL: {self.score_mal}, FM: {self.score_fm}, "
-                f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanilist_url}, {self.filmarks_url}, "
-                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanilist_name}, {self.flimarks_name})")
+                f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
+                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.flimarks_name})")
 
+
+def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=None):
+    """
+    带有重试机制的请求函数。
+
+    Args:
+        url (str): 请求的URL。
+        params (dict, optional): URL参数。默认为None。\
+        data (dict, optional): 请求体数据，适用于POST请求。默认为None。
+        method (str, optional): 请求方法，'GET' 或 'POST'。默认为 'GET'。
+        headers (dict, optional): 请求头。默认为 None。
+
+    Returns:
+        requests.Response: 请求成功时的响应对象，如果所有重试都失败则返回None。
+    """
+    for attempt in range(MAX_RETRIES):
+        try:
+            if method == 'GET':
+                response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT, headers=headers)
+            elif method == 'POST':
+                response = requests.post(url, json=data, timeout=REQUEST_TIMEOUT, headers=headers)
+            else:
+                raise ValueError(f"Unsupported method: {method}")
+
+            response.raise_for_status()  # 检查HTTP状态码，非200会抛出异常
+            return response
+
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Request failed for {url} (Attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)  # 指数退避
+            else:
+                logging.error(f"Max retries reached for {url}. Giving up.")
+                return None
+    return None
+
+
+def extract_bangumi_data(anime):
+    """从Bangumi API提取动画评分。"""
+    keyword_encoded = quote(anime.original_name)
+    search_url = f"https://api.bgm.tv/search/subject/{keyword_encoded}"
+    search_params = {
+        'responseGroup': 'small',
+        'type': 2  # 只需要选择动画分类
+    }
+
+    search_response = fetch_data_with_retry(search_url, params=search_params)
+
+    if search_response and search_response.status_code == 200:
+        try:
+            search_data = search_response.json()
+        except requests.exceptions.JSONDecodeError:
+            logging.error(f"Error decoding JSON response for {anime.original_name}")
+            return False
+
+        if 'list' in search_data and search_data['list']:
+            first_subject = search_data['list'][0]
+            first_subject_id = first_subject['id']  # 获取第一个条目的ID
+            anime.bangumi_url = f"https://bgm.tv/subject/{first_subject_id}"  # 构造Bangumi条目URL
+            anime.bangumi_name = first_subject.get('name', 'No name found')  # 获取Bangumi名称
+            logging.info("bgm的链接:" + str(anime.bangumi_url))
+            logging.info("bgm的条目名字:" + str(anime.bangumi_name))
+            subject_url = f"https://api.bgm.tv/subject/{first_subject_id}"
+            subject_response = fetch_data_with_retry(subject_url)
+
+            if subject_response:
+                subject_data = subject_response.json()
+                if 'rating' in subject_data and 'score' in subject_data['rating']:
+                    total = subject_data['rating']['total']
+                    score_counts = subject_data['rating']['count']
+                    # 确保score和count都是整数类型
+                    weighted_sum = sum(int(score) * int(count) for score, count in score_counts.items())
+                    calculated_score = round(weighted_sum / total, 2)
+                    anime.score_bgm = f"{calculated_score:.2f}"  # 保存评分
+                    anime.bangumi_total = str(total)
+                    logging.info('bgm的页面评分' + str(subject_data['rating']['score']))
+                    logging.info("bgm的评分:" + str(anime.score_bgm))
+                    logging.info("bgm的评分人数:" + str(anime.bangumi_total))
+
+                else:
+                    anime.score_bgm = 'No score available'
+                    logging.warning("No rating information found for Bangumi data.")
+            else:
+                anime.score_bgm = 'No score available'
+                logging.warning("No subject_response information found for Bangumi data.")
+
+        else:
+            anime.score_bgm = 'No results found'  # 没有搜索到结果
+    else:
+        anime.score_bgm = 'Request failed'
+    return True
+
+
+def extract_myanimelist_data(anime):
+    """从MyAnimeList页面提取动画评分。"""
+    keyword_encoded = quote(anime.original_name)
+    mal_search_url = f"https://myanimelist.net/anime.php?q={keyword_encoded}&cat=anime"
+    mal_search_response = fetch_data_with_retry(mal_search_url)
+
+    if mal_search_response and mal_search_response.status_code == 200:
+        mal_tree = html.fromstring(mal_search_response.content)
+        try:
+            # 获取搜索结果中第一个条目的链接
+            anime_href_element = mal_tree.xpath(
+                "//table[@border='0' and @cellpadding='0' and @cellspacing='0' and @width='100%']/tr[2]/td[1]/div[1]/a[1]")[
+                0]
+            anime_href = anime_href_element.get('href')
+            anime.myanimelist_url = anime_href  # 存储MyAnimeList条目链接
+            mal_anime_response = fetch_data_with_retry(anime_href)
+
+            if mal_anime_response:
+                mal_html_content = mal_anime_response.text
+                anime_mal_score_match = re.search(
+                    r'<span itemprop="ratingValue" class="score-label score-\d+">([\d.]+)', mal_html_content)
+                anime.score_mal = str(anime_mal_score_match.group(1)) if anime_mal_score_match else None
+
+                myanimelist_name_match = re.search(r'<h1 class="title-name h1_bold_none"><strong>(.*?)</strong>',
+                                                   mal_html_content)
+                anime.myanimelist_name = str(
+                    myanimelist_name_match.group(1).strip()) if myanimelist_name_match else None
+
+                mal_match = re.search(r'<span itemprop="ratingCount" style="display: none">(\d+)', mal_html_content)
+                anime.myanimelist_total = str(mal_match.group(1)) if mal_match else 'No score found'
+                logging.info("MAL的链接: " + str(anime.myanimelist_url))
+                logging.info("MAL的名称: " + str(anime.myanimelist_name))
+                logging.info("MAL的评分: " + str(anime.score_mal))
+                logging.info("MAL的评分人数: " + str(anime.myanimelist_total))
+            else:
+                anime.score_mal = 'No score found'
+
+        except IndexError:
+            anime.score_mal = 'No href found'  # 没有找到条目链接
+            logging.warning(anime.score_mal)
+    else:
+        anime.score_mal = 'No results found'  # 请求失败
+        logging.warning(anime.score_mal)
+    return True
+
+
+def extract_anilist_data(anime):
+    """从AniList API提取动画评。"""
+    anilist_url = 'https://graphql.anilist.co'
+    anilist_search_query = '''
+    query ($search: String) {
+      Page (page: 1, perPage: 1) {
+        media (search: $search, type: ANIME) {
+          id
+          title {
+            romaji
+          }
+        }
+      }
+    }
+    '''
+    anilist_search_variables = {
+        "search": anime.original_name  # 使用原始名称进行搜索
+    }
+
+    anilist_search_response = fetch_data_with_retry(anilist_url, method='POST', data={'query': anilist_search_query,
+                                                                                      'variables': anilist_search_variables})
+
+    if anilist_search_response:
+        anilist_search_data = anilist_search_response.json()
+
+        if 'data' in anilist_search_data and 'Page' in anilist_search_data['data']:
+            media_list = anilist_search_data['data']['Page']['media']
+            if media_list:
+                first_anime_id = media_list[0]['id']  # 获取第一个条目的ID
+                anime.anilist_url = f"https://anilist.co/anime/{first_anime_id}"  # 构造AniList条目URL
+                anime.anilist_name = media_list[0]['title']['romaji']  # 获取AniList名称
+
+                anilist_detail_query = '''
+                query ($id: Int) {
+                  Media (id: $id) {
+                    averageScore
+                    popularity
+                  }
+                }
+                '''
+                anilist_detail_variables = {
+                    "id": first_anime_id
+                }
+                anilist_detail_response = fetch_data_with_retry(anilist_url, method='POST',
+                                                                data={'query': anilist_detail_query,
+                                                                      'variables': anilist_detail_variables})
+
+                if anilist_detail_response:
+                    anilist_detail_data = anilist_detail_response.json()
+
+                    if 'data' in anilist_detail_data and 'Media' in anilist_detail_data['data']:
+                        anime_detail = anilist_detail_data['data']['Media']
+                        anime.score_al = anime_detail.get('averageScore', 'No score found')
+                        anime.anilist_total = str(anime_detail.get('popularity', 'No popularity info'))
+                        logging.info("AniList的链接: " + str(anime.anilist_url))
+                        logging.info("AniList的名称: " + str(anime.anilist_name))
+                        logging.info("AniList的评分: " + str(anime.score_al))
+                        logging.info("AniList的评分人数: " + str(anime.anilist_total))
+                    else:
+                        anime.score_al = 'No AniList results'
+                else:
+                    anime.score_al = 'No response results'
+            else:
+                anime.score_al = 'No AniList results'
+                anime.popularity = 'No popularity info'
+
+        else:
+            logging.warning("Error with AniList API")
+            anime.score_al = 'Error with AniList API'  # API请求出错
+    else:
+        anime.score_al = 'Request failed'
+    return True
+
+
+def extract_filmarks_data(anime):
+    """从Filmarks页面提取动画评分。"""
+    keyword_encoded = quote(anime.original_name)
+    filmarks_url = f"https://filmarks.com/search/animes?q={keyword_encoded}"
+    filmarks_response = fetch_data_with_retry(filmarks_url)
+
+    if filmarks_response and filmarks_response.status_code == 200:
+        filmarks_tree = html.fromstring(filmarks_response.content)
+        try:
+            anime_fm_score = filmarks_tree.xpath(
+                '/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[2]/div[3]/div/div[2]/text()')
+            anime.score_fm = anime_fm_score[0].strip() if anime_fm_score else 'No score found'
+            anime.filmarks_url = filmarks_url  # 存储Filmarks URL
+
+            filmarks_name = filmarks_tree.xpath(
+                '/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[2]/div[1]/h3/text()')
+            anime.flimarks_name = filmarks_name[0].strip() if filmarks_name else 'No name found'
+
+            filmarks_total = filmarks_tree.xpath(
+                '/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[1]/div[2]/div[1]/a/span/text()')
+            anime.filmarks_total = filmarks_total[0].strip() if filmarks_total else 'No name found'
+
+            logging.info("Filmarks的链接: " + str(anime.filmarks_url))
+            logging.info("Filmarks的名称: " + str(anime.flimarks_name))
+            logging.info("Filmarks的评分: " + str(anime.score_fm))
+            logging.info("Filmarks的评分人数: " + str(anime.filmarks_total))
+
+        except IndexError:
+            anime.score_fm = 'No Filmarks score found'  # 没有找到评分
+            logging.warning(anime.score_fm)
+    else:
+        anime.score_fm = 'No Filmarks results'  # Filmarks请求失败
+    return True
+
+
+def update_excel_data(ws, index, anime):
+    """更新Excel表格中的数据。"""
+    current_row = ws[index + 2]  # DataFrame是从0开始的，而Excel是从1开始的，且第一行通常是表头
+    if current_row[0].value == anime.original_name:  # 匹配原始名称
+
+        # 定义不可用值
+        unavailable_values = ['No score available', 'No results found', '', None,
+                              'No href found', 'No Filmarks score found', 'No Filmarks results', 'N/A',
+                              'No score found', 'No AniList results', 'Error with AniList API', 'No response results']
+
+        # 辅助函数，用于安全地将值转换为float，如果无法转换则返回None。
+        def safe_float(value):
+            """安全地将值转换为float，如果无法转换则返回None。"""
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
+
+        # 辅助函数，用于判断值是否有效
+        def is_valid_value(value):
+            return value not in unavailable_values
+
+        # 辅助函数，用于安全地将数据写入Excel单元格
+        def write_value(cell, value):
+            """将值安全地写入Excel单元格，处理None值。"""
+            cell.value = value if value is not None else None
+
+        # 写入Bangumi数据
+        bgm_score = safe_float(anime.score_bgm)
+        write_value(current_row[2], bgm_score if is_valid_value(anime.score_bgm) else None)
+        bgm_total = safe_float(anime.bangumi_total)
+        write_value(current_row[3], bgm_total if is_valid_value(anime.bangumi_total) else None)
+
+        # 写入AniList数据
+        al_score = safe_float(anime.score_al)
+        write_value(current_row[4], al_score / 10 if is_valid_value(anime.score_al) and al_score is not None else None)
+        al_total = safe_float(anime.anilist_total)
+        write_value(current_row[5], al_total if is_valid_value(anime.anilist_total) else None)
+
+        # 写入MyAnimeList数据
+        mal_score = safe_float(anime.score_mal)
+        write_value(current_row[6], mal_score if is_valid_value(anime.score_mal) else None)
+        mal_total = safe_float(anime.myanimelist_total)
+        write_value(current_row[7], mal_total if is_valid_value(anime.myanimelist_total) else None)
+
+        # 写入Filmarks数据
+        fm_score = safe_float(anime.score_fm)
+        write_value(current_row[8], fm_score if is_valid_value(anime.score_fm) else None)
+        write_value(current_row[9], fm_score * 2 if is_valid_value(anime.score_fm) else None)
+        write_value(current_row[10], anime.filmarks_total if is_valid_value(anime.filmarks_total) else None)
+
+        try:
+            # 写入名称并设置超链接
+            write_value(current_row[13],
+                        anime.bangumi_name if anime.bangumi_name not in ['No name found', None] else None)
+            if anime.bangumi_url:
+                ws.cell(row=index + 2, column=14).hyperlink = anime.bangumi_url
+        except Exception as e:
+            logging.error(f"Error writing Bangumi data for {anime.original_name[:50]}: {e}")  # 限制anime original name长度
+
+        try:
+            write_value(current_row[14],
+                        anime.anilist_name if anime.anilist_name not in ['No name found', None] else None)
+            if anime.anilist_url:
+                ws.cell(row=index + 2, column=15).hyperlink = anime.anilist_url
+        except Exception as e:
+            logging.error(f"Error writing AniList data for {anime.original_name[:50]}: {e}")  # 限制anime original name长度
+        try:
+            write_value(current_row[15],
+                        anime.myanimelist_name if anime.myanimelist_name not in ['No name found', None] else None)
+            if anime.myanimelist_url:
+                ws.cell(row=index + 2, column=16).hyperlink = anime.myanimelist_url
+        except Exception as e:
+            logging.error(
+                f"Error writing MyAnimeList data for {anime.original_name[:50]}: {e}")  # 限制anime original name长度
+
+        try:
+            write_value(current_row[16],
+                        anime.flimarks_name if anime.flimarks_name not in ['No name found', None] else None)
+            if anime.filmarks_url:
+                ws.cell(row=index + 2, column=17).hyperlink = anime.filmarks_url
+        except Exception as e:
+            logging.error(f"Error writing Filmarks data for {anime.original_name[:50]}: {e}")  # 限制anime original name长度
 
 
 try:
@@ -46,292 +392,40 @@ try:
     wb = load_workbook(file_path)
     ws = wb.active
     df = pd.read_excel(file_path)
-    # 定义 AniList GraphQL API 的URL
-    anilist_url = 'https://graphql.anilist.co'
 
     # 遍历DataFrame中的每一行数据
     for index, row in df.iterrows():
         if pd.isna(row['原名']):
-            print(f"Skipping row {index} because the original name is NaN.")
+            logging.warning(f"Skipping row {index} because the original name is NaN.")
             continue  # 跳过这一行
         anime = Anime(original_name=row['原名'])  # 获取每行的“原名”列作为原始名称
+        logging.info(str(anime))
+        # 提取数据
+        extract_bangumi_data(anime)
+        extract_myanimelist_data(anime)
+        extract_anilist_data(anime)
+        extract_filmarks_data(anime)
+        # 更新Excel数据
+        update_excel_data(ws, index, anime)
 
-        # URL编码处理动漫名称，避免特殊字符带来的问题
-        keyword_encoded = requests.utils.quote(anime.original_name.encode('utf-8'))
-        print(anime)
-        try:
-            # 1. 调用 Bangumi API 搜索条目
-            search_url = f"https://api.bgm.tv/search/subject/{keyword_encoded}"
-            # print(search_url)
-            search_params = {
-                'responseGroup': 'small',
-                'type': 2  # 假设我们只关注动画类型的条目
-            }
-            search_response = requests.get(search_url, params=search_params)
-            if search_response.status_code == 200:
-                try:
-                    search_data = search_response.json()
-                except requests.exceptions.JSONDecodeError:
-                    print(f"Error decoding JSON response for {anime.original_name}")
-                    search_data = {}
-            else:
-                print(f"Failed to fetch Bangumi data for {anime.original_name}, status code: {search_response.status_code}")
-                search_data = {}
+        # 延时以避免频繁请求被拒绝
+        time.sleep(0.1)
 
-            # 如果搜索结果包含列表且有条目
-            if 'list' in search_data and search_data['list']:
-                first_subject_id = search_data['list'][0]['id']  # 获取第一个条目的ID
-                anime.bangumi_url = f"https://bgm.tv/subject/{first_subject_id}"  # 构造Bangumi条目URL
-                anime.bangumi_name = search_data['list'][0].get('name', 'No name found')  # 获取Bangumi名称
-
-                # 请求获取详细条目数据
-                subject_url = f"https://api.bgm.tv/subject/{first_subject_id}"
-                subject_response = requests.get(subject_url)
-                subject_data = subject_response.json()
-
-                # 如果存在评分信息，则保存评分，否则标记为未找到评分
-                if 'rating' in subject_data and 'score' in subject_data['rating']:
-                    print('bgm的页面评分'+str(subject_data['rating']['score']))
-                    print('bgm的精确评分'+str((subject_data['rating']['count']['1']*1+subject_data['rating']['count']['2']*2+subject_data['rating']['count']['3']*3+subject_data['rating']['count']['4']*4+subject_data['rating']['count']['5']*5+subject_data['rating']['count']['6']*6+subject_data['rating']['count']['7']*7+subject_data['rating']['count']['8']*8+subject_data['rating']['count']['9']*9+subject_data['rating']['count']['10']*10)/subject_data['rating']['total']))
-                    anime.score_bgm = round((subject_data['rating']['count']['1']*1+subject_data['rating']['count']['2']*2+subject_data['rating']['count']['3']*3+subject_data['rating']['count']['4']*4+subject_data['rating']['count']['5']*5+subject_data['rating']['count']['6']*6+subject_data['rating']['count']['7']*7+subject_data['rating']['count']['8']*8+subject_data['rating']['count']['9']*9+subject_data['rating']['count']['10']*10)/subject_data['rating']['total'],2)
-                    anime.score_bgm = f"{anime.score_bgm:.2f}"
-                    anime.bangumi_total = str(subject_data['rating']['total'])
-                else:
-                    anime.score_bgm = 'No score available'
-                print("bgm的链接:" + str(anime.bangumi_url))
-                print("bgm的条目名字:" + str(anime.bangumi_name))
-                print("bgm的评分:" + str(anime.score_bgm))
-                print("bgm的评分人数:" + str(anime.bangumi_total))
-            else:
-                anime.score_bgm = 'No results found'  # 没有搜索到结果
-                print(f"Failed to fetch Bangumi data for {anime.original_name}, status code: {search_response.status_code}")
-
-            # 延时以避免频繁请求被拒绝
-            time.sleep(1)
-        except Exception as e:
-            print(f"Error fetching Bangumi data for {anime.original_name}: {sys.exc_info()[0]}")
-
-
-        # 2. 调用 MyAnimeList 页面搜索
-        try:
-            mal_search_url = f"https://myanimelist.net/anime.php?q={keyword_encoded}&cat=anime"
-            mal_search_response = requests.get(mal_search_url)
-            if mal_search_response.status_code == 200:
-                mal_tree = html.fromstring(mal_search_response.content)
-                try:
-                    # 获取搜索结果中第一个条目的链接
-                    anime_href_element = mal_tree.xpath("//table[@border='0' and @cellpadding='0' and @cellspacing='0' and @width='100%']/tr[2]/td[1]/div[1]/a[1]")[0]
-                    anime_href = anime_href_element.get('href')
-                    anime.myanilist_url = anime_href  # 存储MyAnimeList条目链接
-                    mal_anime_response = requests.get(anime_href)
-                    if mal_anime_response.status_code == 200:
-                        mal_html_content = mal_anime_response.text
-                        # mal_anime_tree = html.fromstring(mal_anime_response.content)
-                        # print(html.tostring(mal_anime_tree, pretty_print=True).decode('utf-8'))
-                        # 获取评分信息
-                        # anime_mal_score = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[2]/table/tr[1]/td[2]/div[1]/table/tr[1]/td/div[1]/div[1]/div[1]/div[1]/div[1]/div/text()')
-                        # anime_mal_score = anime_mal_score[0].strip() if anime_mal_score else 'No score found'
-                        anime_mal_score_match = re.search(r'<span itemprop="ratingValue" class="score-label score-\d+">([\d.]+)', mal_html_content)
-                        anime_mal_score = str(anime_mal_score_match.group(1)) if anime_mal_score_match else None
-                        anime.score_mal = anime_mal_score  # 保存评分
-                        # 获取MyAnimeList的名称
-                        # myanimelist_name = mal_anime_tree.xpath('/html/body/div[1]/div[2]/div[3]/div[1]/div/div[1]/div/h1/strong/text()')
-                        # anime.myanilist_name = myanimelist_name[0].strip() if myanimelist_name else 'No name found'
-                        myanimelist_name_match = re.search(r'<h1 class="title-name h1_bold_none"><strong>(.*?)</strong>', mal_html_content)
-                        anime.myanilist_name = str(myanimelist_name_match.group(1).strip()) if myanimelist_name_match else None
-                        # 获取MyAnimeList评分人数
-                        mal_match = re.search(r'<span itemprop="ratingCount" style="display: none">(\d+)', mal_html_content)
-                        if mal_match:
-                            anime.myanilist_total = str(mal_match.group(1))
-                        else:
-                            anime.myanilist_total = 'No score found'
-                    else:
-                        anime.score_mal = 'No score found'
-                    print("MAL的链接: " + str(anime.myanilist_url))
-                    print("MAL的名称: " + str(anime.myanilist_name))
-                    print("MAL的评分: " + str(anime.score_mal))
-                    print("MAL的评分人数: " + str(anime.myanilist_total))
-                except IndexError:
-                    anime.score_mal = 'No href found'  # 没有找到条目链接
-                    print(anime.score_mal)
-            else:
-                anime.score_mal = 'No results found'  # 请求失败
-                print(anime.score_mal)
-        except Exception as e:
-            print(f"Error fetching MyAnimeList data for {anime.original_name}: {sys.exc_info()[0]}")
-
-        try:
-
-            # 3. 调用 AniList API 搜索
-            anilist_search_query = '''
-            query ($search: String) {
-              Page (page: 1, perPage: 1) {
-                media (search: $search, type: ANIME) {
-                  id
-                  title {
-                    romaji
-                  }
-                }
-              }
-            }
-            '''
-            anilist_search_variables = {
-                "search": anime.original_name  # 使用原始名称进行搜索
-            }
-            anilist_search_response = requests.post(anilist_url, json={'query': anilist_search_query, 'variables': anilist_search_variables})
-            anilist_search_data = anilist_search_response.json()
-            # 处理AniList API返回的数据
-            if 'data' in anilist_search_data and 'Page' in anilist_search_data['data']:
-                media_list = anilist_search_data['data']['Page']['media']
-                if media_list:
-                    first_anime_id = media_list[0]['id']  # 获取第一个条目的ID
-                    anime.anilist_url = f"https://anilist.co/anime/{first_anime_id}"  # 构造AniList条目URL
-                    anime.anilist_name = media_list[0]['title']['romaji']  # 获取AniList名称
-                    # 请求获取详细评分信息
-                    anilist_detail_query = '''
-                    query ($id: Int) {
-                      Media (id: $id) {
-                        averageScore
-                        popularity  
-                      }
-                    }
-                    '''
-                    anilist_detail_variables = {
-                        "id": first_anime_id
-                    }
-                    anilist_detail_response = requests.post(anilist_url, json={'query': anilist_detail_query,
-                                                                               'variables': anilist_detail_variables})
-                    anilist_detail_data = anilist_detail_response.json()
-
-                    # 处理AniList API返回的数据
-                    if 'data' in anilist_detail_data and 'Media' in anilist_detail_data['data']:
-                        anime_detail = anilist_detail_data['data']['Media']
-                        anime.score_al = anime_detail.get('averageScore', 'No score found')
-                        anime.anilist_total = anime_detail.get('popularity', 'No popularity info')  # 存储受欢迎度
-                        anime.anilist_total = str(anime.anilist_total)
-                    else:
-                        anime.score_al = 'No AniList results'
-                        anime.popularity = 'No popularity info'
-                print("AniList的链接: " + str(anime.anilist_url))
-                print("AniList的名称: " + str(anime.anilist_name))
-                print("AniList的评分: " + str(anime.score_al))
-                print("AniList的评分人数: " + str(anime.anilist_total))
-            else:
-                anime.score_al = 'Error with AniList API'  # API请求出错
-                print(anime.score_al)
-        except Exception as e:
-            print(f"Error fetching AniList data for {anime.original_name}: {sys.exc_info()[0]}")
-
-        try:
-            # 4. 调用 Filmarks API 搜索
-            filmarks_url = f"https://filmarks.com/search/animes?q={keyword_encoded}"
-            filmarks_response = requests.get(filmarks_url)
-            if filmarks_response.status_code == 200:
-                filmarks_tree = html.fromstring(filmarks_response.content)
-                try:
-                    # 获取评分信息
-                    anime_fm_score = filmarks_tree.xpath('/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[2]/div[3]/div/div[2]/text()')
-                    anime.score_fm = anime_fm_score[0].strip() if anime_fm_score else 'No score found'
-                    anime.filmarks_url = filmarks_url  # 存储Filmarks URL
-                    # 获取Filmarks名称
-                    filmarks_name = filmarks_tree.xpath('/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[2]/div[1]/h3/text()')
-                    anime.flimarks_name = filmarks_name[0].strip() if filmarks_name else 'No name found'
-                    # 获取Filmarks评分人数
-                    filmarks_total = filmarks_tree.xpath('/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[1]/div[2]/div[1]/a/span/text()')
-                    print(filmarks_total)
-                    anime.filmarks_total = filmarks_total[0].strip() if filmarks_total else 'No name found'
-                    print("Filmarks的链接: " + str(anime.filmarks_url))
-                    print("Filmarks的名称: " + str(anime.flimarks_name))
-                    print("Filmarks的评分: " + str(anime.score_fm))
-                    print("Filmarks的评分人数: " + str(anime.filmarks_total))
-                except IndexError:
-                    anime.score_fm = 'No Filmarks score found'  # 没有找到评分
-                    print(anime.score_fm)
-            else:
-                anime.score_fm = 'No Filmarks results'  # Filmarks请求失败
-        except Exception as e:
-            print(f"Error fetching Filmarks data for {anime.original_name}: {sys.exc_info()[0]}")
-
-        # 更新Excel行数据
-        current_row = ws[index + 2]  # DataFrame是从0开始的，而Excel是从1开始的，且第一行通常是表头
-        if current_row[0].value == anime.original_name:  # 匹配原始名称
-            try:
-                current_row[2].value = float(anime.score_bgm) if anime.score_bgm not in ['No score available', 'No results found', '', None] else None
-            except ValueError:
-                current_row[2].value = None
-            try:
-                current_row[3].value = float(anime.bangumi_total) if anime.bangumi_total not in ['No score available', 'No results found', '', None] else None
-            except ValueError:
-                current_row[3].value = None
-            try:
-                current_row[4].value = float(anime.score_al) / 10 if anime.score_al not in ['No score found','No score available','No results found', 'No AniList results','Error with AniList API','', None] else None
-            except ValueError:
-                current_row[4].value = None
-            try:
-                current_row[5].value = float(anime.anilist_total) if anime.anilist_total not in ['No score found','No score available','No results found', 'No AniList results','Error with AniList API','', None] else None
-            except ValueError:
-                current_row[5].value = None
-            try:
-                current_row[6].value = float(anime.score_mal) if anime.score_mal not in ['No href found','No score found','No score available', 'No results found', '', None] else None
-            except ValueError:
-                current_row[6].value = None
-            try:
-                current_row[7].value = float(anime.myanilist_total) if anime.myanilist_total not in ['No href found','No score found','No score available', 'No results found', '', None] else None
-            except ValueError:
-                current_row[7].value = None
-            try:
-                current_row[8].value = float(anime.score_fm) if anime.score_fm not in ['No score available', 'No results found', 'No Filmarks score found','No Filmarks results','N/A','', None] else None
-            except ValueError:
-                current_row[8].value = None
-            try:
-                current_row[9].value = float(anime.score_fm) * 2 if anime.score_fm not in ['No score available', 'No results found', 'No Filmarks score found','No Filmarks results','N/A','', None] else None
-            except ValueError:
-                current_row[9].value = None
-            try:
-                current_row[10].value = anime.filmarks_total if anime.filmarks_total not in ['No score available', 'No results found', 'No Filmarks score found','No Filmarks results','N/A','', None] else None
-            except ValueError:
-                current_row[10].value = None
-            try:
-                # 写入名称并设置超链接
-                current_row[13].value = anime.bangumi_name if anime.bangumi_name not in ['No name found', None] else None
-                if anime.bangumi_url:
-                    ws.cell(row=index + 2, column=14).hyperlink = anime.bangumi_url
-            except Exception as e:
-                print(f"Error writing Bangumi data for {anime.original_name}: {sys.exc_info()[0]}")
-            try:
-                current_row[14].value = anime.anilist_name if anime.anilist_name not in ['No name found', None] else None
-                if anime.anilist_url:
-                    ws.cell(row=index + 2, column=15).hyperlink = anime.anilist_url
-            except Exception as e:
-                print(f"Error writing AniList data for {anime.original_name}: {sys.exc_info()[0]}")
-            try:
-                current_row[15].value = anime.myanilist_name if anime.myanilist_name not in ['No name found', None] else None
-                if anime.myanilist_url:
-                    ws.cell(row=index + 2, column=16).hyperlink = anime.myanilist_url
-            except Exception as e:
-                print(f"Error writing MyAnimeList data for {anime.original_name}: {sys.exc_info()[0]}")
-            try:
-                current_row[16].value = anime.flimarks_name if anime.flimarks_name not in ['No name found', None] else None
-                if anime.filmarks_url:
-                    ws.cell(row=index + 2, column=17).hyperlink = anime.filmarks_url
-            except Exception as e:
-                print(f"Error writing Filmarks data for {anime.original_name}: {sys.exc_info()[0]}")
-    print(anime)
     # # 保存更新后的Excel文件
     # wb.save(file_path)
     # print("Excel表格已成功更新。")
 
 except Exception as e:
-    print(f"发生错误: {e}")
+    logging.error(f"发生错误: {e}")
 
 finally:
     try:
         wb.save(file_path)
-        print("Excel表格已成功更新。")
+        logging.info("Excel表格已成功更新。")
     except Exception as e:
-        print(f"保存Excel文件时发生错误: {e}")
+        logging.error(f"保存Excel文件时发生错误: {e}")
     while True:
         user_input = input("输入 'exit' 退出程序: ")
         if user_input.lower() == 'exit':  # 忽略大小写，允许 'exit' 退出
             break
-    print("程序已退出...")
+    logging.info("程序已退出...")
