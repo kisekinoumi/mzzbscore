@@ -22,6 +22,7 @@ logging.basicConfig(level=logging.INFO,
 MAX_RETRIES = 3
 REQUEST_TIMEOUT = 10  # 设置请求超时时间，单位为秒
 
+
 # Anime 类，并增加更多的属性用于存储不同平台的数据
 class Anime:
     def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
@@ -42,15 +43,16 @@ class Anime:
         self.myanimelist_name = myanimelist_name  # MyAnimeList名称
         self.flimarks_name = flimarks_name  # Filmarks名称
         self.bangumi_total = bangumi_total  # Bangumi评分人数
-        self.anilist_total = anilist_total # AniList评分人数
+        self.anilist_total = anilist_total  # AniList评分人数
         self.myanimelist_total = myanimelist_total  # MyAnimeList评分人数
-        self.filmarks_total = filmarks_total # Filmarks评分人数
+        self.filmarks_total = filmarks_total  # Filmarks评分人数
 
     def __str__(self):
         return (f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
                 f"MAL: {self.score_mal}, FM: {self.score_fm}, "
                 f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
                 f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.flimarks_name})")
+
 
 def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=None):
     """
@@ -88,7 +90,24 @@ def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=Non
     return None
 
 
-def extract_bangumi_data(anime):
+def preprocess_name(original_name):
+    """
+    预处理原始名称，将特殊符号替换为空格。
+
+    Args:
+        original_name (str): 原始名称
+
+    Returns:
+        str: 处理后的名称
+    """
+    #  去除特殊字符
+    cleaned_name = re.sub(r'[-*@#\.\+]', ' ', str(original_name), flags=re.UNICODE)
+    # 将多个连续空格替换为单个空格
+    cleaned_name = re.sub(r'\s+', ' ', cleaned_name).strip()
+    return cleaned_name
+
+
+def extract_bangumi_data(anime, processed_name):
     """从Bangumi v0 API提取动画评分。"""
     # 使用v0 API的正确搜索接口
     search_url = "https://api.bgm.tv/v0/search/subjects"
@@ -102,7 +121,7 @@ def extract_bangumi_data(anime):
 
     # 构建请求体 - POST 请求
     search_data = {
-        "keyword": anime.original_name,
+        "keyword": processed_name,
         "filter": {
             "type": [2]  # 2表示动画类型
         }
@@ -170,9 +189,10 @@ def extract_bangumi_data(anime):
 
     return True
 
-def extract_myanimelist_data(anime):
+
+def extract_myanimelist_data(anime, processed_name):
     """从MyAnimeList页面提取动画评分。"""
-    keyword_encoded = quote(anime.original_name)
+    keyword_encoded = quote(processed_name)
     mal_search_url = f"https://myanimelist.net/anime.php?q={keyword_encoded}&cat=anime"
     mal_search_response = fetch_data_with_retry(mal_search_url)
 
@@ -215,7 +235,8 @@ def extract_myanimelist_data(anime):
         logging.warning(anime.score_mal)
     return True
 
-def extract_anilist_data(anime):
+
+def extract_anilist_data(anime, processed_name):
     """从AniList API提取动画评。"""
     anilist_url = 'https://graphql.anilist.co'
     anilist_search_query = '''
@@ -231,7 +252,7 @@ def extract_anilist_data(anime):
     }
     '''
     anilist_search_variables = {
-        "search": anime.original_name  # 使用原始名称进行搜索
+        "search": processed_name  # 使用原始名称进行搜索
     }
 
     anilist_search_response = fetch_data_with_retry(anilist_url, method='POST', data={'query': anilist_search_query,
@@ -288,9 +309,10 @@ def extract_anilist_data(anime):
         anime.score_al = 'Request failed'
     return True
 
-def extract_filmarks_data(anime):
+
+def extract_filmarks_data(anime, processed_name):
     """从Filmarks页面提取动画评分。"""
-    keyword_encoded = quote(anime.original_name)
+    keyword_encoded = quote(processed_name)
     filmarks_url = f"https://filmarks.com/search/animes?q={keyword_encoded}"
     filmarks_response = fetch_data_with_retry(filmarks_url)
 
@@ -321,6 +343,7 @@ def extract_filmarks_data(anime):
     else:
         anime.score_fm = 'No Filmarks results'  # Filmarks请求失败
     return True
+
 
 def update_excel_data(ws, index, anime):
     """
@@ -483,6 +506,8 @@ def update_excel_data(ws, index, anime):
                 ws.cell(row=index + 2, column=17).hyperlink = anime.filmarks_url
         except Exception as e:
             logging.error(f"Error writing Filmarks URL for {anime.original_name[:50]}: {e}")
+
+
 try:
     # 读取Excel文件，假设文件名为test.xlsx
     file_path = 'mzzb.xlsx'
@@ -497,11 +522,14 @@ try:
             continue  # 跳过这一行
         anime = Anime(original_name=row['原名'])  # 获取每行的“原名”列作为原始名称
         logging.info(str(anime))
+        # 预处理名称
+        processed_name = preprocess_name(anime.original_name)
+
         # 提取数据
-        extract_bangumi_data(anime)
-        extract_myanimelist_data(anime)
-        extract_anilist_data(anime)
-        extract_filmarks_data(anime)
+        extract_bangumi_data(anime, processed_name)
+        extract_myanimelist_data(anime, processed_name)
+        extract_anilist_data(anime, processed_name)
+        extract_filmarks_data(anime, processed_name)
         # 更新Excel数据
         update_excel_data(ws, index, anime)
 
