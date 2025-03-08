@@ -22,7 +22,6 @@ logging.basicConfig(level=logging.INFO,
 MAX_RETRIES = 3
 REQUEST_TIMEOUT = 10  # 设置请求超时时间，单位为秒
 
-
 # Anime 类，并增加更多的属性用于存储不同平台的数据
 class Anime:
     def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
@@ -52,7 +51,6 @@ class Anime:
                 f"MAL: {self.score_mal}, FM: {self.score_fm}, "
                 f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
                 f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.flimarks_name})")
-
 
 def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=None):
     """
@@ -91,60 +89,86 @@ def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=Non
 
 
 def extract_bangumi_data(anime):
-    """从Bangumi API提取动画评分。"""
-    keyword_encoded = quote(anime.original_name)
-    search_url = f"https://api.bgm.tv/search/subject/{keyword_encoded}"
-    search_params = {
-        'responseGroup': 'small',
-        'type': 2  # 只需要选择动画分类
+    """从Bangumi v0 API提取动画评分。"""
+    # 使用v0 API的正确搜索接口
+    search_url = "https://api.bgm.tv/v0/search/subjects"
+
+    # 设置v0 API所需的请求头
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36 Edg/106.0.1370.42'
     }
 
-    search_response = fetch_data_with_retry(search_url, params=search_params)
+    # 构建请求体 - POST 请求
+    search_data = {
+        "keyword": anime.original_name,
+        "filter": {
+            "type": [2]  # 2表示动画类型
+        }
+    }
 
-    if search_response and search_response.status_code == 200:
+    # 使用 POST 方法并传递 JSON 请求体
+    search_response = fetch_data_with_retry(
+        url=search_url,
+        method='POST',
+        params={"limit": 1},  # 只需要第一个结果
+        data=search_data,
+        headers=headers
+    )
+
+    if search_response:
         try:
-            search_data = search_response.json()
+            search_result = search_response.json()
         except requests.exceptions.JSONDecodeError:
             logging.error(f"Error decoding JSON response for {anime.original_name}")
             return False
 
-        if 'list' in search_data and search_data['list']:
-            first_subject = search_data['list'][0]
+        if 'data' in search_result and search_result['data']:
+            first_subject = search_result['data'][0]
             first_subject_id = first_subject['id']  # 获取第一个条目的ID
             anime.bangumi_url = f"https://bgm.tv/subject/{first_subject_id}"  # 构造Bangumi条目URL
             anime.bangumi_name = first_subject.get('name', 'No name found')  # 获取Bangumi名称
+
             logging.info("bgm的链接:" + str(anime.bangumi_url))
             logging.info("bgm的条目名字:" + str(anime.bangumi_name))
-            subject_url = f"https://api.bgm.tv/subject/{first_subject_id}"
-            subject_response = fetch_data_with_retry(subject_url)
+
+            # 使用v0 API获取条目详情
+            subject_url = f"https://api.bgm.tv/v0/subjects/{first_subject_id}"
+            subject_response = fetch_data_with_retry(url=subject_url, headers=headers)
 
             if subject_response:
-                subject_data = subject_response.json()
-                if 'rating' in subject_data and 'score' in subject_data['rating']:
-                    total = subject_data['rating']['total']
-                    score_counts = subject_data['rating']['count']
-                    # 确保score和count都是整数类型
-                    weighted_sum = sum(int(score) * int(count) for score, count in score_counts.items())
-                    calculated_score = round(weighted_sum / total, 2)
-                    anime.score_bgm = f"{calculated_score:.2f}"  # 保存评分
-                    anime.bangumi_total = str(total)
-                    logging.info('bgm的页面评分' + str(subject_data['rating']['score']))
-                    logging.info("bgm的评分:" + str(anime.score_bgm))
-                    logging.info("bgm的评分人数:" + str(anime.bangumi_total))
+                try:
+                    subject_data = subject_response.json()
 
-                else:
+                    if 'rating' in subject_data and 'count' in subject_data['rating'] and subject_data['rating'][
+                        'count']:
+                        total = subject_data['rating']['total']
+                        score_counts = subject_data['rating']['count']
+                        # 确保score和count都是整数类型
+                        weighted_sum = sum(int(score) * int(count) for score, count in score_counts.items())
+                        calculated_score = round(weighted_sum / total, 2)
+                        anime.score_bgm = f"{calculated_score:.2f}"  # 保存评分
+                        anime.bangumi_total = str(total)
+
+                        logging.info('bgm的页面评分' + str(subject_data['rating']['score']))
+                        logging.info("bgm的评分:" + str(anime.score_bgm))
+                        logging.info("bgm的评分人数:" + str(anime.bangumi_total))
+                    else:
+                        anime.score_bgm = 'No score available'
+                        logging.warning("No rating information found for Bangumi data.")
+                except requests.exceptions.JSONDecodeError:
                     anime.score_bgm = 'No score available'
-                    logging.warning("No rating information found for Bangumi data.")
+                    logging.error(f"Error decoding JSON response for subject {first_subject_id}")
             else:
                 anime.score_bgm = 'No score available'
                 logging.warning("No subject_response information found for Bangumi data.")
-
         else:
             anime.score_bgm = 'No results found'  # 没有搜索到结果
     else:
         anime.score_bgm = 'Request failed'
-    return True
 
+    return True
 
 def extract_myanimelist_data(anime):
     """从MyAnimeList页面提取动画评分。"""
@@ -190,7 +214,6 @@ def extract_myanimelist_data(anime):
         anime.score_mal = 'No results found'  # 请求失败
         logging.warning(anime.score_mal)
     return True
-
 
 def extract_anilist_data(anime):
     """从AniList API提取动画评。"""
@@ -265,7 +288,6 @@ def extract_anilist_data(anime):
         anime.score_al = 'Request failed'
     return True
 
-
 def extract_filmarks_data(anime):
     """从Filmarks页面提取动画评分。"""
     keyword_encoded = quote(anime.original_name)
@@ -299,7 +321,6 @@ def extract_filmarks_data(anime):
     else:
         anime.score_fm = 'No Filmarks results'  # Filmarks请求失败
     return True
-
 
 def update_excel_data(ws, index, anime):
     """更新Excel表格中的数据。"""
@@ -384,7 +405,6 @@ def update_excel_data(ws, index, anime):
                 ws.cell(row=index + 2, column=17).hyperlink = anime.filmarks_url
         except Exception as e:
             logging.error(f"Error writing Filmarks data for {anime.original_name[:50]}: {e}")  # 限制anime original name长度
-
 
 try:
     # 读取Excel文件，假设文件名为test.xlsx
