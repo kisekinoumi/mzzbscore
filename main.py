@@ -21,37 +21,47 @@ logging.basicConfig(level=logging.INFO,
 # 常量定义
 MAX_RETRIES = 3
 REQUEST_TIMEOUT = 10  # 设置请求超时时间，单位为秒
+date_error = []  # 用于存储日期错误信息
 
 
 # Anime 类，并增加更多的属性用于存储不同平台的数据
 class Anime:
     def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
                  bangumi_url='', anilist_url='', myanimelist_url='', filmarks_url='',
-                 bangumi_name='', anilist_name='', myanimelist_name='', flimarks_name='', bangumi_total='',
-                 anilist_total='', myanimelist_total='', filmarks_total=''):
+                 bangumi_name='', anilist_name='', myanimelist_name='', flimarks_name='',
+                 bangumi_total='', anilist_total='', myanimelist_total='', filmarks_total='',
+                 bangumi_subject_Date='', myanimelist_subject_Date='', anilist_subject_Date='',
+                 filmarks_subject_Date=''):
         self.original_name = original_name  # 原始名称
-        self.score_bgm = score_bgm  # Bangumi评分
-        self.score_al = score_al  # AniList评分
-        self.score_mal = score_mal  # MyAnimeList评分
-        self.score_fm = score_fm  # Filmarks评分
-        self.bangumi_url = bangumi_url  # Bangumi条目链接
-        self.anilist_url = anilist_url  # AniList条目链接
-        self.myanimelist_url = myanimelist_url  # MyAnimeList条目链接
-        self.filmarks_url = filmarks_url  # Filmarks条目链接
-        self.bangumi_name = bangumi_name  # Bangumi名称
-        self.anilist_name = anilist_name  # AniList名称
-        self.myanimelist_name = myanimelist_name  # MyAnimeList名称
-        self.flimarks_name = flimarks_name  # Filmarks名称
-        self.bangumi_total = bangumi_total  # Bangumi评分人数
-        self.anilist_total = anilist_total  # AniList评分人数
-        self.myanimelist_total = myanimelist_total  # MyAnimeList评分人数
-        self.filmarks_total = filmarks_total  # Filmarks评分人数
+        self.score_bgm = score_bgm  # Bangumi 评分
+        self.score_al = score_al  # AniList 评分
+        self.score_mal = score_mal  # MyAnimeList 评分
+        self.score_fm = score_fm  # Filmarks 评分
+        self.bangumi_url = bangumi_url  # Bangumi 条目链接
+        self.anilist_url = anilist_url  # AniList 条目链接
+        self.myanimelist_url = myanimelist_url  # MyAnimeList 条目链接
+        self.filmarks_url = filmarks_url  # Filmarks 条目链接
+        self.bangumi_name = bangumi_name  # Bangumi 名称
+        self.anilist_name = anilist_name  # AniList 名称
+        self.myanimelist_name = myanimelist_name  # MyAnimeList 名称
+        self.flimarks_name = flimarks_name  # Filmarks 名称
+        self.bangumi_total = bangumi_total  # Bangumi 评分人数
+        self.anilist_total = anilist_total  # AniList 人气/评分人数
+        self.myanimelist_total = myanimelist_total  # MyAnimeList 评分人数
+        self.filmarks_total = filmarks_total  # Filmarks 评分人数
+        # 开播日期统一格式为 "YYYYMM"
+        self.bangumi_subject_Date = bangumi_subject_Date
+        self.myanimelist_subject_Date = myanimelist_subject_Date
+        self.anilist_subject_Date = anilist_subject_Date
+        self.filmarks_subject_Date = filmarks_subject_Date
 
     def __str__(self):
         return (f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
                 f"MAL: {self.score_mal}, FM: {self.score_fm}, "
                 f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
-                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.flimarks_name})")
+                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.flimarks_name}, "
+                f"StartDates: BGM:{self.bangumi_subject_Date}, MAL:{self.myanimelist_subject_Date}, "
+                f"AL:{self.anilist_subject_Date}, FM:{self.filmarks_subject_Date})")
 
 
 def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=None):
@@ -159,7 +169,6 @@ def extract_bangumi_data(anime, processed_name):
             if subject_response:
                 try:
                     subject_data = subject_response.json()
-
                     if 'rating' in subject_data and 'count' in subject_data['rating'] and subject_data['rating'][
                         'count']:
                         total = subject_data['rating']['total']
@@ -167,12 +176,25 @@ def extract_bangumi_data(anime, processed_name):
                         # 确保score和count都是整数类型
                         weighted_sum = sum(int(score) * int(count) for score, count in score_counts.items())
                         calculated_score = round(weighted_sum / total, 2)
-                        anime.score_bgm = f"{calculated_score:.2f}"  # 保存评分
+                        anime.score_bgm = f"{calculated_score:.2f}"  # 强制保留两位小数保存评分
                         anime.bangumi_total = str(total)
 
                         logging.info('bgm的页面评分' + str(subject_data['rating']['score']))
                         logging.info("bgm的评分:" + str(anime.score_bgm))
                         logging.info("bgm的评分人数:" + str(anime.bangumi_total))
+
+                        if "date" in subject_data and isinstance(subject_data["date"], str):
+                            date_str = subject_data["date"]
+                            # 使用正则表达式检查日期格式是否为 YYYY-MM-DD
+                            if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+                                year = date_str[:4]
+                                month = date_str[5:7]
+                                anime.bangumi_subject_Date = year + month
+                                logging.info("Bangumi放送日期: " + str(anime.bangumi_subject_Date))
+                            else:
+                                logging.info("Bangumi放送日期格式不正确，应为 YYYY-MM-DD")
+                        else:
+                            logging.info("Bangumi的JSON 数据中缺少 'date' 字段")
                     else:
                         anime.score_bgm = 'No score available'
                         logging.warning("No rating information found for Bangumi data.")
@@ -217,13 +239,28 @@ def extract_myanimelist_data(anime, processed_name):
                                                    mal_html_content)
                 anime.myanimelist_name = str(
                     myanimelist_name_match.group(1).strip()) if myanimelist_name_match else None
-
                 mal_match = re.search(r'<span itemprop="ratingCount" style="display: none">(\d+)', mal_html_content)
                 anime.myanimelist_total = str(mal_match.group(1)) if mal_match else 'No score found'
                 logging.info("MAL的链接: " + str(anime.myanimelist_url))
                 logging.info("MAL的名称: " + str(anime.myanimelist_name))
                 logging.info("MAL的评分: " + str(anime.score_mal))
                 logging.info("MAL的评分人数: " + str(anime.myanimelist_total))
+                # 开播日期提取：假设页面中 Aired 部分格式为 "Jan 10, 2025 to ?"
+                air_date_match = re.search(r'<span class="dark_text">Aired:</span>\s*(?:<td>)?([^<]+)',
+                                           mal_html_content)
+                anime.air_date_mal = air_date_match.group(1).strip() if air_date_match else 'No air date found'
+                match = re.search(r'([A-Za-z]{3})\s+\d{1,2},\s+(\d{4})', anime.air_date_mal)
+                if match:
+                    month_abbr = match.group(1)
+                    year = match.group(2)
+                    month_map = {"Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04",
+                                 "May": "05", "Jun": "06", "Jul": "07", "Aug": "08",
+                                 "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"}
+                    month = month_map.get(month_abbr, "00")
+                    anime.myanimelist_subject_Date = f"{year}{month}"
+                    logging.info("MAL开播日期: " + str(anime.myanimelist_subject_Date))
+                else:
+                    logging.info("MAL日期格式不匹配")
             else:
                 anime.score_mal = 'No score found'
 
@@ -273,6 +310,10 @@ def extract_anilist_data(anime, processed_name):
                   Media (id: $id) {
                     averageScore
                     popularity
+                    startDate {
+                      year
+                      month
+                    }                    
                   }
                 }
                 '''
@@ -290,10 +331,18 @@ def extract_anilist_data(anime, processed_name):
                         anime_detail = anilist_detail_data['data']['Media']
                         anime.score_al = anime_detail.get('averageScore', 'No score found')
                         anime.anilist_total = str(anime_detail.get('popularity', 'No popularity info'))
+                        start_date = anime_detail.get('startDate', {})
+                        year = start_date.get('year')
+                        month = start_date.get('month')
+                        if year is not None and month is not None:
+                            anime.anilist_subject_Date = f"{year}{month:02d}"
+                        else:
+                            anime.anilist_subject_Date = 'No start date found'
                         logging.info("AniList的链接: " + str(anime.anilist_url))
                         logging.info("AniList的名称: " + str(anime.anilist_name))
                         logging.info("AniList的评分: " + str(anime.score_al))
                         logging.info("AniList的评分人数: " + str(anime.anilist_total))
+                        logging.info("AniList开播日期: " + str(anime.anilist_subject_Date))
                     else:
                         anime.score_al = 'No AniList results'
                 else:
@@ -336,6 +385,22 @@ def extract_filmarks_data(anime, processed_name):
             logging.info("Filmarks的名称: " + str(anime.flimarks_name))
             logging.info("Filmarks的评分: " + str(anime.score_fm))
             logging.info("Filmarks的评分人数: " + str(anime.filmarks_total))
+
+            filmarks_date = filmarks_tree.xpath(
+                '/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[2]/div[2]/span[1]/text()'
+            )
+            if filmarks_date:
+                date_str = filmarks_date[0].strip()  # 例如 "2025年01月02日"
+                match = re.search(r'(\d{4})年(\d{2})月', date_str)
+                if match:
+                    year = match.group(1)
+                    month = match.group(2)
+                    anime.filmarks_subject_Date = year + month  # "YYYYMM"
+                    logging.info("Filmarks开播日期: " + str(anime.filmarks_subject_Date))
+                else:
+                    logging.info("Filmarks日期格式不匹配")
+            else:
+                logging.info("未获取到Filmarks日期")
 
         except IndexError:
             anime.score_fm = 'No Filmarks score found'  # 没有找到评分
@@ -397,8 +462,7 @@ def update_excel_data(ws, index, anime):
         try:
             write_value(
                 current_row[4],
-                al_score / 10 if (is_valid_value(anime.score_al) and al_score is not None) else None
-            )
+                f"{al_score / 10:.1f}" if (is_valid_value(anime.score_al) and al_score is not None) else None)
         except Exception as e:
             logging.error(f"Error writing AniList score for {anime.original_name[:50]}: {e}")
         try:
@@ -507,9 +571,79 @@ def update_excel_data(ws, index, anime):
         except Exception as e:
             logging.error(f"Error writing Filmarks URL for {anime.original_name[:50]}: {e}")
 
+        # ---------------------放送日期写入---------------------
+        try:
+            error_cell = ws.cell(row=index + 2, column=18)
+
+            # 检查哪些平台的日期数据缺失
+            missing_platforms = []
+            if not anime.bangumi_subject_Date:
+                missing_platforms.append("bangumi")
+            if not anime.myanimelist_subject_Date:
+                missing_platforms.append("myanimelist")
+            if not anime.anilist_subject_Date:
+                missing_platforms.append("anilist")
+            if not anime.filmarks_subject_Date:
+                missing_platforms.append("filmarks")
+
+            error_message = ""
+            # 如果有缺失的平台
+            if missing_platforms:
+                missing_msg = "/".join(missing_platforms) + "放送日期不存在"
+                logging.info(missing_msg)
+                error_message = missing_msg
+                error_cell.value = missing_msg
+
+                # 获取有日期数据的平台及其值
+                valid_dates = {}
+                if anime.bangumi_subject_Date:
+                    valid_dates["Bangumi"] = anime.bangumi_subject_Date
+                if anime.myanimelist_subject_Date:
+                    valid_dates["MAL"] = anime.myanimelist_subject_Date
+                if anime.anilist_subject_Date:
+                    valid_dates["AniList"] = anime.anilist_subject_Date
+                if anime.filmarks_subject_Date:
+                    valid_dates["Filmarks"] = anime.filmarks_subject_Date
+
+                # 判断剩余的日期是否一致
+                if len(valid_dates) > 1:
+                    dates = list(valid_dates.values())
+                    all_same = all(date == dates[0] for date in dates)
+
+                    if not all_same:
+                        diff_str = "; ".join([f"{platform}: {date}" for platform, date in valid_dates.items()])
+                        logging.info("存在的平台放送日期不相同: " + diff_str)
+                        error_message += "; " + diff_str
+                        error_cell.value += "; " + diff_str
+            else:
+                # 所有平台都有日期数据，判断是否一致
+                if (anime.bangumi_subject_Date == anime.myanimelist_subject_Date ==
+                        anime.anilist_subject_Date == anime.filmarks_subject_Date):
+                    logging.info("四个平台的开播日期相同: " + anime.bangumi_subject_Date)
+                    error_cell.value = ""
+                    error_message = ""
+                else:
+                    diff_str = (f"Bangumi: {anime.bangumi_subject_Date}; "
+                                f"AniList: {anime.anilist_subject_Date}; "
+                                f"MAL: {anime.myanimelist_subject_Date}; "
+                                f"Filmarks: {anime.filmarks_subject_Date}")
+                    logging.info("四个平台的开播日期不相同: " + diff_str)
+                    error_cell.value = diff_str
+                    error_message = diff_str
+
+            # 如果有错误信息，则添加到date_error列表
+            if error_message:
+                date_error.append({
+                    "name": anime.original_name,
+                    "error": error_message
+                })
+
+        except Exception as e:
+            logging.error(f"在处理索引 {index} 时发生错误: {e}")
+            pass
 
 try:
-    # 读取Excel文件，假设文件名为test.xlsx
+    # 读取Excel文件，假设文件名为mzzb.xlsx
     file_path = 'mzzb.xlsx'
     wb = load_workbook(file_path)
     ws = wb.active
@@ -547,6 +681,18 @@ finally:
     try:
         wb.save(file_path)
         logging.info("Excel表格已成功更新。")
+
+        # 输出日期错误信息
+        if date_error:
+            logging.info("\n" + "=" * 50)
+            logging.info("日期错误汇总 (共 %d 条):" % len(date_error))
+            logging.info("=" * 50)
+            for i, error in enumerate(date_error, 1):
+                logging.info("%d. 作品：%s" % (i, error["name"]))
+                logging.info("   错误：%s" % error["error"])
+                logging.info("-" * 50)
+        else:
+            logging.info("没有发现任何日期错误！")
     except Exception as e:
         logging.error(f"保存Excel文件时发生错误: {e}")
     while True:
