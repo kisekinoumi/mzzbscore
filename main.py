@@ -612,7 +612,7 @@ def update_excel_data(ws, index, anime):
             logging.error(f"Error writing Bangumi name for {anime.original_name[:50]}: {e}")
         try:
             if anime.bangumi_url:
-                ws.cell(row=index + 2, column=14).hyperlink = anime.bangumi_url
+                ws.cell(row=index + 3, column=14).hyperlink = anime.bangumi_url
         except Exception as e:
             logging.error(f"Error writing Bangumi URL for {anime.original_name[:50]}: {e}")
 
@@ -626,7 +626,7 @@ def update_excel_data(ws, index, anime):
             logging.error(f"Error writing AniList name for {anime.original_name[:50]}: {e}")
         try:
             if anime.anilist_url:
-                ws.cell(row=index + 2, column=15).hyperlink = anime.anilist_url
+                ws.cell(row=index + 3, column=15).hyperlink = anime.anilist_url
         except Exception as e:
             logging.error(f"Error writing AniList URL for {anime.original_name[:50]}: {e}")
 
@@ -640,7 +640,7 @@ def update_excel_data(ws, index, anime):
             logging.error(f"Error writing MAL name for {anime.original_name[:50]}: {e}")
         try:
             if anime.myanimelist_url:
-                ws.cell(row=index + 2, column=16).hyperlink = anime.myanimelist_url
+                ws.cell(row=index + 3, column=16).hyperlink = anime.myanimelist_url
         except Exception as e:
             logging.error(f"Error writing MAL URL for {anime.original_name[:50]}: {e}")
 
@@ -654,13 +654,13 @@ def update_excel_data(ws, index, anime):
             logging.error(f"Error writing Filmarks name for {anime.original_name[:50]}: {e}")
         try:
             if anime.filmarks_url:
-                ws.cell(row=index + 2, column=17).hyperlink = anime.filmarks_url
+                ws.cell(row=index + 3, column=17).hyperlink = anime.filmarks_url
         except Exception as e:
             logging.error(f"Error writing Filmarks URL for {anime.original_name[:50]}: {e}")
 
         # ---------------------放送日期写入---------------------
         try:
-            error_cell = ws.cell(row=index + 2, column=18)
+            error_cell = ws.cell(row=index + 3, column=18)
 
             # 检查哪些平台的日期数据缺失
             missing_platforms = []
