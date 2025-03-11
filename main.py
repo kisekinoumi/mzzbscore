@@ -226,7 +226,8 @@ def extract_bangumi_data(anime, processed_name):
             # 处理评分信息
             if ('rating' in candidate_subject_data and
                     'count' in candidate_subject_data['rating'] and
-                    candidate_subject_data['rating']['count']):
+                    candidate_subject_data['rating']['count'] and
+                    candidate_subject_data['rating']['total']):
                 total = candidate_subject_data['rating']['total']
                 score_counts = candidate_subject_data['rating']['count']
                 weighted_sum = sum(int(score) * int(count) for score, count in score_counts.items())
