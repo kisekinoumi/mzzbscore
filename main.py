@@ -1,6 +1,4 @@
-import json
 import logging
-import re
 import sys
 import time
 from html import unescape
@@ -11,13 +9,13 @@ from openpyxl import load_workbook
 # 导入自定义模块
 from models import Anime
 from utils import preprocess_name
-from extractors import (
+from biz.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
     extract_anilist_data,
     extract_filmarks_data
 )
-from data_process.excel_handler import update_excel_data
+from biz.data_process.excel_handler import update_excel_data
 
 # 配置日志
 log_file_path = 'mzzb_score.log'
