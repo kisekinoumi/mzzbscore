@@ -16,7 +16,7 @@ from biz.extractors import (
     extract_filmarks_data
 )
 from biz.data_process.excel_handler import update_excel_data
-
+import concurrent.futures
 # 配置日志
 log_file_path = 'mzzb_score.log'
 logging.basicConfig(level=logging.INFO,
@@ -53,11 +53,31 @@ try:
         # 预处理名称
         processed_name = preprocess_name(anime.original_name)
 
-        # 提取数据
-        extract_bangumi_data(anime, processed_name)
-        extract_myanimelist_data(anime, processed_name)
-        extract_anilist_data(anime, processed_name)
-        extract_filmarks_data(anime, processed_name)
+        # 提取数据 - 并发执行
+        # 原始的串行执行代码（注释掉）
+        # extract_bangumi_data(anime, processed_name)
+        # extract_myanimelist_data(anime, processed_name)
+        # extract_anilist_data(anime, processed_name)
+        # extract_filmarks_data(anime, processed_name)
+        
+        # 创建线程池执行器
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            # 提交所有任务到线程池
+            future_to_extractor = {
+                executor.submit(extract_bangumi_data, anime, processed_name): "bangumi",
+                executor.submit(extract_myanimelist_data, anime, processed_name): "myanimelist",
+                executor.submit(extract_anilist_data, anime, processed_name): "anilist",
+                executor.submit(extract_filmarks_data, anime, processed_name): "filmarks"
+            }
+            
+            # 等待所有任务完成
+            for future in concurrent.futures.as_completed(future_to_extractor):
+                extractor_name = future_to_extractor[future]
+                try:
+                    result = future.result()
+                    logging.info(f"{extractor_name} extractor completed")
+                except Exception as exc:
+                    logging.error(f"{extractor_name} extractor generated an exception: {exc}")
 
         # 如果 MAL 没有找到候选条目，但 AniList 搜到名称，则用 AniList 返回的名称重新搜索 MAL
         if anime.score_mal == "No acceptable subject found" and anime.anilist_name:
