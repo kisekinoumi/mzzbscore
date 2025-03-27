@@ -9,6 +9,8 @@ from openpyxl import load_workbook
 # 导入自定义模块
 from models import Anime
 from utils import preprocess_name
+from utils.logger import setup_logger, date_error
+from utils.global_variables import ALLOWED_YEARS, DESIRED_YEAR, FILE_PATH, update_constants
 from biz.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
@@ -17,32 +19,19 @@ from biz.extractors import (
 )
 from biz.data_process.excel_handler import update_excel_data
 import concurrent.futures
+
 # 配置日志
-log_file_path = 'mzzb_score.log'
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[
-                        logging.FileHandler(log_file_path, mode='w', encoding='utf-8'),  # 'w' 覆盖模式
-                        logging.StreamHandler(sys.stdout)  # 同时输出到控制台
-                    ])
-
-# 常量定义
-date_error = []  # 用于存储日期错误信息
-
-# 全局变量，将在程序运行时设置
-ALLOWED_YEARS = []
-DESIRED_YEAR = ""
+logging = setup_logger()
 
 try:
-    # 读取Excel文件，假设文件名为mzzb.xlsx
-    file_path = 'mzzb.xlsx'
-    wb = load_workbook(file_path)
+    # 读取Excel文件
+    wb = load_workbook(FILE_PATH)
     ws = wb.active
 
-    DESIRED_YEAR = str(ws['A1'].value)[:4]  # 读取表格设置目标放送年份
-    ALLOWED_YEARS = [DESIRED_YEAR, str(int(DESIRED_YEAR) - 1)]  # 例如 ["2025", "2024"]
+    # 更新全局常量
+    update_constants(str(ws['A1'].value)[:4])  # 读取表格设置目标放送年份
 
-    df = pd.read_excel(file_path, skiprows=1)
+    df = pd.read_excel(FILE_PATH, skiprows=1)
     # 遍历DataFrame中的每一行数据
     for index, row in df.iterrows():
         if pd.isna(row['原名']):
@@ -102,7 +91,7 @@ except Exception as e:
 
 finally:
     try:
-        wb.save(file_path)
+        wb.save(FILE_PATH)
         logging.info("Excel表格已成功更新。")
 
         # 输出日期错误信息

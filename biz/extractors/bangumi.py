@@ -9,7 +9,7 @@ from utils import fetch_data_with_retry
 def extract_bangumi_data(anime, processed_name):
     """从Bangumi v0 API提取动画评分。（如果放送年份不在 ALLOWED_YEARS 中则选择下一个条目，最多尝试5次）。"""
     # 导入全局变量
-    from main import ALLOWED_YEARS
+    from utils.global_variables import ALLOWED_YEARS
 
     search_url = "https://api.bgm.tv/v0/search/subjects"
     headers = {

@@ -7,7 +7,7 @@ from utils import fetch_data_with_retry
 def extract_anilist_data(anime, processed_name):
     """从AniList API提取动画评。"""
     # 导入全局变量
-    from main import ALLOWED_YEARS
+    from utils.global_variables import ALLOWED_YEARS
     
     anilist_url = 'https://graphql.anilist.co'
     anilist_search_query = '''

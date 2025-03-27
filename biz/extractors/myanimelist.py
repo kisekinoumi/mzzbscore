@@ -10,7 +10,7 @@ from utils import fetch_data_with_retry
 def extract_myanimelist_data(anime, processed_name):
     """从MyAnimeList页面提取动画评分。"""
     # 导入全局变量
-    from main import ALLOWED_YEARS
+    from utils.global_variables import ALLOWED_YEARS
     
     keyword_encoded = quote(processed_name)
     mal_search_url = f"https://myanimelist.net/anime.php?q={keyword_encoded}&cat=anime"
