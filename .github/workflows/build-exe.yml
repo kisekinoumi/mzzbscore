@@ -1,4 +1,4 @@
-name: Build EXE
+name: 构建EXE文件
 
 on:
   push:
@@ -9,52 +9,43 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest  # 使用Windows环境构建exe
+    runs-on: windows-latest
+    permissions:
+      contents: write  # 明确授予写入权限
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: 检出代码
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: 设置Python环境
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
           pip install pandas requests lxml openpyxl
 
-      - name: Build EXE with PyInstaller
+      - name: 使用PyInstaller构建EXE
         run: |
-          pyinstaller --onefile --name mzzb_score --icon=NONE mzzb_score.py
+          pyinstaller --onefile --name mzzb_score main.py
 
-      - name: Upload EXE file
-        uses: actions/upload-artifact@v3
+      - name: 上传构建结果
+        uses: actions/upload-artifact@v4
         with:
           name: mzzb_score
           path: dist/mzzb_score.exe
 
-      - name: Create Release
-        id: create_release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'  # 只在push到main分支时创建发布
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 创建发布版本
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
         with:
+          files: dist/mzzb_score.exe
+          name: 发布版本 v${{ github.run_number }}
           tag_name: v${{ github.run_number }}
-          release_name: Release v${{ github.run_number }}
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'  # 只在push到main分支时上传发布资产
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/mzzb_score.exe
-          asset_name: mzzb_score.exe
-          asset_content_type: application/octet-stream
