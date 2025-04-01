@@ -24,7 +24,7 @@ def extract_filmarks_data(anime, processed_name):
 
             filmarks_name = filmarks_tree.xpath(
                 '/html/body/div[3]/div[3]/div[2]/div[1]/div[2]/div/div[1]/div[2]/div[1]/h3/text()')
-            anime.flimarks_name = filmarks_name[0].strip() if filmarks_name else 'No name found'
+            anime.filmarks_name = filmarks_name[0].strip() if filmarks_name else 'No name found'
 
             filmarks_total = filmarks_tree.xpath('//*[@class="js-cassette"]/@data-mark')
             if filmarks_total:
@@ -34,7 +34,7 @@ def extract_filmarks_data(anime, processed_name):
                 anime.filmarks_total = 'No total found'
 
             logging.info("Filmarks的链接: " + str(anime.filmarks_url))
-            logging.info("Filmarks的名称: " + str(anime.flimarks_name))
+            logging.info("Filmarks的名称: " + str(anime.filmarks_name))
             logging.info("Filmarks的评分: " + str(anime.score_fm))
             logging.info("Filmarks的评分人数: " + str(anime.filmarks_total))
 

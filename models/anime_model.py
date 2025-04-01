@@ -4,7 +4,7 @@
 class Anime:
     def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
                  bangumi_url='', anilist_url='', myanimelist_url='', filmarks_url='',
-                 bangumi_name='', anilist_name='', myanimelist_name='', flimarks_name='',
+                 bangumi_name='', anilist_name='', myanimelist_name='', filmarks_name='',
                  bangumi_total='', anilist_total='', myanimelist_total='', filmarks_total='',
                  bangumi_subject_Date='', myanimelist_subject_Date='', anilist_subject_Date='',
                  filmarks_subject_Date=''):
@@ -20,7 +20,7 @@ class Anime:
         self.bangumi_name = bangumi_name  # Bangumi 名称
         self.anilist_name = anilist_name  # AniList 名称
         self.myanimelist_name = myanimelist_name  # MyAnimeList 名称
-        self.flimarks_name = flimarks_name  # Filmarks 名称
+        self.filmarks_name = filmarks_name  # Filmarks 名称
         self.bangumi_total = bangumi_total  # Bangumi 评分人数
         self.anilist_total = anilist_total  # AniList 人气/评分人数
         self.myanimelist_total = myanimelist_total  # MyAnimeList 评分人数
@@ -35,6 +35,6 @@ class Anime:
         return (f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
                 f"MAL: {self.score_mal}, FM: {self.score_fm}, "
                 f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
-                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.flimarks_name}, "
+                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.filmarks_name}, "
                 f"StartDates: BGM:{self.bangumi_subject_Date}, MAL:{self.myanimelist_subject_Date}, "
                 f"AL:{self.anilist_subject_Date}, FM:{self.filmarks_subject_Date})")

@@ -154,7 +154,7 @@ def update_excel_data(ws, index, anime):
         try:
             write_value(
                 current_row[16],
-                anime.flimarks_name if anime.flimarks_name not in ['No name found', None] else None
+                anime.filmarks_name if anime.filmarks_name not in ['No name found', None] else None
             )
         except Exception as e:
             logging.error(f"Error writing Filmarks name for {anime.original_name[:50]}: {e}")
