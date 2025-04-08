@@ -1,5 +1,3 @@
-import logging
-import sys
 import time
 from html import unescape
 
@@ -9,7 +7,7 @@ from openpyxl import load_workbook
 # 导入自定义模块
 from models import Anime
 from utils import preprocess_name, setup_logger, date_error
-from utils.global_variables import ALLOWED_YEARS, DESIRED_YEAR, FILE_PATH, update_constants
+from utils.global_variables import FILE_PATH, update_constants
 from biz.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,

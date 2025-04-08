@@ -4,7 +4,6 @@
 import logging
 import time
 import requests
-import functools
 
 # 常量定义
 MAX_RETRIES = 3
