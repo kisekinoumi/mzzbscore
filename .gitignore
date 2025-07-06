@@ -12,3 +12,7 @@ dist/
 .idea/
 *.log
 *.pyc
+
+# 临时文件
+temp.py
+test.py
