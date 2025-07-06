@@ -114,6 +114,9 @@ jobs:
             - **构建时间**: ${{ github.event.head_commit.timestamp }}
             - **提交哈希**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
 
+            ###  使用说明
+            下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境。
+
             ---
             *此版本由 GitHub Actions 自动构建和发布*
           draft: false
