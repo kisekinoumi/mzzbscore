@@ -2,7 +2,9 @@
 # 存放AniList数据提取逻辑
 
 import logging
+
 from utils import fetch_data_with_retry
+
 
 def extract_anilist_data(anime, processed_name):
     """从AniList API提取动画评。"""
@@ -71,12 +73,17 @@ def extract_anilist_data(anime, processed_name):
                 first_anime_id = candidate_media['id']
                 anime.anilist_url = f"https://anilist.co/anime/{first_anime_id}"
                 anime.anilist_name = candidate_media['title']['romaji']
-                # 使用单独查询获取评分和人气数据
+                # 使用单独查询获取评分和统计数据
                 anilist_detail_query = '''
                 query ($id: Int) {
                   Media (id: $id) {
                     averageScore
-                    popularity
+                    stats {
+                      scoreDistribution {
+                        score
+                        amount
+                      }
+                    }
                   }
                 }
                 '''
@@ -89,7 +96,23 @@ def extract_anilist_data(anime, processed_name):
                     if 'data' in anilist_detail_data and 'Media' in anilist_detail_data['data']:
                         anime_detail = anilist_detail_data['data']['Media']
                         anime.score_al = anime_detail.get('averageScore', 'No score found')
-                        anime.anilist_total = str(anime_detail.get('popularity', 'No popularity info'))
+
+                        # 计算所有分数段的评分人数之和
+                        total_votes = 0
+                        stats = anime_detail.get('stats', {})
+                        score_distribution = stats.get('scoreDistribution', [])
+
+                        if score_distribution:
+                            for score_data in score_distribution:
+                                amount = score_data.get('amount', 0)
+                                if amount:
+                                    total_votes += amount
+                            anime.anilist_total = str(total_votes)
+                            logging.info(f"计算得到的AniList总评分人数: {total_votes}")
+                        else:
+                            anime.anilist_total = 'No vote data available'
+                            logging.warning("无法获取AniList评分分布数据")
+                        
                         logging.info("AniList链接: " + str(anime.anilist_url))
                         logging.info("AniList名称: " + str(anime.anilist_name))
                         logging.info("AniList评分: " + str(anime.score_al))
@@ -103,7 +126,7 @@ def extract_anilist_data(anime, processed_name):
                     logging.warning("AniList请求失败")
             else:
                 anime.score_al = 'No AniList results'
-                anime.popularity = 'No popularity info'
+                anime.anilist_total = 'No vote data available'
                 logging.warning("AniList无结果")
 
         else:
