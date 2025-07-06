@@ -17,35 +17,134 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
+      - name: 计算版本号
+        id: version
+        run: |
+          # 计算语义化版本号 va.b.c
+          # 初始值: a=2, b=0, c=0 (v2.0.0)
+          # 每次提交 c+1，c>=10 时 c=0 且 b+1，b>=10 时 b=0 且 a+1
+          
+          $runNumber = ${{ github.run_number }}
+          $totalIncrements = $runNumber - 1
+          
+          $c = $totalIncrements % 10
+          $bIncrements = [math]::Floor($totalIncrements / 10)
+          $b = $bIncrements % 10
+          $aIncrements = [math]::Floor($bIncrements / 10)
+          $a = 2 + $aIncrements
+          
+          $version = "v$a.$b.$c"
+          
+          Write-Host "🏷️ 计算得到版本号: $version"
+          Write-Host "📊 计算详情:"
+          Write-Host "   - Run Number: $runNumber"
+          Write-Host "   - Total Increments: $totalIncrements"
+          Write-Host "   - a: $a, b: $b, c: $c"
+          
+          # 输出给后续步骤使用
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "major=$a" >> $env:GITHUB_OUTPUT
+          echo "minor=$b" >> $env:GITHUB_OUTPUT
+          echo "patch=$c" >> $env:GITHUB_OUTPUT
+
       - name: 设置Python环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
+      - name: 缓存Python依赖
+        uses: actions/cache@v3
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
-          pip install pandas requests lxml openpyxl
+          pip install -r requirements.txt
+
+      - name: 创建构建信息文件
+        run: |
+          echo "构建时间: $(Get-Date)" > build_info.txt
+          echo "版本号: ${{ steps.version.outputs.version }}" >> build_info.txt
+          echo "版本详情: ${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }}.${{ steps.version.outputs.patch }}" >> build_info.txt
+          echo "提交哈希: ${{ github.sha }}" >> build_info.txt
+          echo "构建编号: ${{ github.run_number }}" >> build_info.txt
 
       - name: 使用PyInstaller构建EXE
         run: |
-          pyinstaller --onefile --name mzzb_score main.py
+          pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 main.py
 
-      - name: 上传构建结果
+      - name: 验证构建结果
+        run: |
+          if (Test-Path "dist/mzzb_score.exe") {
+            Write-Host "✅ EXE文件构建成功"
+            $fileSize = (Get-Item "dist/mzzb_score.exe").Length / 1MB
+            Write-Host "📦 文件大小: $([math]::Round($fileSize, 2)) MB"
+            Write-Host "🏷️ 版本号: ${{ steps.version.outputs.version }}"
+          } else {
+            Write-Host "❌ EXE文件构建失败"
+            exit 1
+          }
+
+      - name: 上传构建结果到Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mzzb_score
-          path: dist/mzzb_score.exe
+          name: mzzb_score-${{ steps.version.outputs.version }}
+          path: |
+            dist/mzzb_score.exe
+            build_info.txt
+          retention-days: 30
 
       - name: 创建发布版本
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/mzzb_score.exe
-          name: v1.${{ github.run_number }}
-          tag_name: v${{ github.run_number }}
+          files: |
+            dist/mzzb_score.exe
+            build_info.txt
+          name: "动漫评分工具 ${{ steps.version.outputs.version }}"
+          tag_name: "${{ steps.version.outputs.version }}"
+          body: |
+            ## 🎉 评分统计工具新版本发布
+
+            ### 📋 版本信息
+            - **版本号**: ${{ steps.version.outputs.version }}
+            - **主版本**: ${{ steps.version.outputs.major }}
+            - **次版本**: ${{ steps.version.outputs.minor }}
+            - **修订版本**: ${{ steps.version.outputs.patch }}
+            - **构建编号**: ${{ github.run_number }}
+            - **构建时间**: ${{ github.event.head_commit.timestamp }}
+            - **提交哈希**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+            ### 📥 下载说明
+            下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境。
+
+            ### 🔄 版本规则
+            - 版本格式：`va.b.c`
+            - 每次提交修订版本 `c` 加1
+            - 当 `c ≥ 10` 时，`c` 重置为0，次版本 `b` 加1  
+            - 当 `b ≥ 10` 时，`b` 重置为0，主版本 `a` 加1
+
+            ### 🔗 相关链接
+            - [源代码](https://github.com/${{ github.repository }})
+            - [使用说明](https://github.com/${{ github.repository }}/blob/main/README.md)
+            - [所有版本](https://github.com/${{ github.repository }}/releases)
+
+            ---
+            *此版本由 GitHub Actions 自动构建和发布*
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建完成通知
+        if: success()
+        run: |
+          Write-Host "🎉 构建和发布完成！"
+          Write-Host "📦 版本号: ${{ steps.version.outputs.version }}"
+          Write-Host "🏷️ 标签: ${{ steps.version.outputs.version }}"
+          Write-Host "🔗 下载地址: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
