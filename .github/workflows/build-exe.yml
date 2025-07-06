@@ -109,30 +109,10 @@ jobs:
           name: "${{ steps.version.outputs.version }}"
           tag_name: "${{ steps.version.outputs.version }}"
           body: |
-            ## 🎉 评分统计工具新版本发布
-
-            ### 📋 版本信息
-            - **版本号**: ${{ steps.version.outputs.version }}
-            - **主版本**: ${{ steps.version.outputs.major }}
-            - **次版本**: ${{ steps.version.outputs.minor }}
-            - **修订版本**: ${{ steps.version.outputs.patch }}
+            ###  版本信息
             - **构建编号**: ${{ github.run_number }}
             - **构建时间**: ${{ github.event.head_commit.timestamp }}
             - **提交哈希**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-
-            ### 📥 下载说明
-            下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境。
-
-            ### 🔄 版本规则
-            - 版本格式：`va.b.c`
-            - 每次提交修订版本 `c` 加1
-            - 当 `c ≥ 10` 时，`c` 重置为0，次版本 `b` 加1  
-            - 当 `b ≥ 10` 时，`b` 重置为0，主版本 `a` 加1
-
-            ### 🔗 相关链接
-            - [源代码](https://github.com/${{ github.repository }})
-            - [使用说明](https://github.com/${{ github.repository }}/blob/main/README.md)
-            - [所有版本](https://github.com/${{ github.repository }}/releases)
 
             ---
             *此版本由 GitHub Actions 自动构建和发布*
