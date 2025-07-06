@@ -106,7 +106,7 @@ jobs:
           files: |
             dist/mzzb_score.exe
             build_info.txt
-          name: "动漫评分工具 ${{ steps.version.outputs.version }}"
+          name: "${{ steps.version.outputs.version }}"
           tag_name: "${{ steps.version.outputs.version }}"
           body: |
             ## 🎉 评分统计工具新版本发布
