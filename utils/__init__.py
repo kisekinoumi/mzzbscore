@@ -10,7 +10,23 @@ __all__ = [
     'FILE_PATH',               # 从global_variables模块
     'update_constants',        # 从global_variables模块
     'setup_logger',            # 从logger模块
-    'date_error'               # 从logger模块
+    'date_error',              # 从logger模块
+    'ExcelColumnHelper',       # 从excel_utils模块
+    'safe_write_cell',         # 从excel_utils模块
+    'get_workbook_info',       # 从excel_utils模块
+    'is_valid_value',          # 从data_validators模块
+    'is_valid_name',           # 从data_validators模块
+    'safe_float',              # 从data_validators模块
+    'safe_int',                # 从data_validators模块
+    'validate_score_range',    # 从data_validators模块
+    'validate_url',            # 从data_validators模块
+    'sanitize_anime_name',     # 从data_validators模块
+    'validate_anime_data',     # 从data_validators模块
+    'UNAVAILABLE_VALUES',      # 从data_validators模块
+    'INVALID_NAMES',           # 从data_validators模块
+    'ExcelColumns',            # 从excel_columns模块
+    'ColumnMappings',          # 从excel_columns模块
+    'COLUMN_NAMES'             # 从excel_columns模块
 ]
 
 # 从network模块导入
@@ -24,3 +40,16 @@ from utils.global_variables import ALLOWED_YEARS, DESIRED_YEAR, FILE_PATH, updat
 
 # 从logger模块导入
 from utils.logger import setup_logger, date_error
+
+# 从excel_utils模块导入
+from utils.excel_utils import ExcelColumnHelper, safe_write_cell, get_workbook_info
+
+# 从data_validators模块导入
+from utils.data_validators import (
+    is_valid_value, is_valid_name, safe_float, safe_int, validate_score_range,
+    validate_url, sanitize_anime_name, validate_anime_data,
+    UNAVAILABLE_VALUES, INVALID_NAMES
+)
+
+# 从excel_columns模块导入
+from utils.excel_columns import ExcelColumns, ColumnMappings, COLUMN_NAMES

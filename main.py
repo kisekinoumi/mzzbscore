@@ -15,12 +15,22 @@ from biz.extractors import (
     extract_filmarks_data
 )
 from biz.data_process.excel_handler import update_excel_data
+from utils import ExcelColumnHelper
 import concurrent.futures
 
 # 配置日志
 logging = setup_logger()
 
+# 强制清空日期错误列表，确保每次运行都是干净的开始
+date_error.clear()
+
+# 防止重复执行的标志
+if __name__ != "__main__":
+    exit()
+
 try:
+    logging.info("程序开始运行...")
+    
     # 读取Excel文件
     wb = load_workbook(FILE_PATH)
     ws = wb.active
@@ -29,6 +39,13 @@ try:
     update_constants(str(ws['A1'].value)[:4])  # 读取表格设置目标放送年份
 
     df = pd.read_excel(FILE_PATH, skiprows=1)
+    
+    # 清空日期错误列表，避免重复累积
+    date_error.clear()
+    
+    # 创建Excel列助手（只创建一次，避免重复输出映射日志）
+    col_helper = ExcelColumnHelper(ws)
+    
     # 遍历DataFrame中的每一行数据
     for index, row in df.iterrows():
         if pd.isna(row['原名']):
@@ -78,7 +95,7 @@ try:
 
 
         # 更新Excel数据
-        update_excel_data(ws, index, anime)
+        update_excel_data(ws, index, anime, col_helper)
 
         # 延时以避免频繁请求被拒绝
         time.sleep(0.1)
@@ -87,11 +104,15 @@ except Exception as e:
     logging.error(f"发生错误: {e}")
 
 finally:
+    # 保存Excel文件
     try:
         wb.save(FILE_PATH)
         logging.info("Excel表格已成功更新。")
-
-        # 输出日期错误信息
+    except Exception as e:
+        logging.error(f"保存Excel文件时发生错误: {e}")
+    
+    # 输出日期错误信息
+    try:
         if date_error:
             logging.info("\n" + "=" * 50)
             logging.info("日期错误汇总 (共 %d 条):" % len(date_error))
@@ -103,9 +124,17 @@ finally:
         else:
             logging.info("没有发现任何日期错误！")
     except Exception as e:
-        logging.error(f"保存Excel文件时发生错误: {e}")
-    while True:
-        user_input = input("输入 'exit' 退出程序: ")
-        if user_input.lower() == 'exit':  # 忽略大小写，允许 'exit' 退出
-            break
-    logging.info("程序已退出...")
+        logging.error(f"输出日期错误信息时发生错误: {e}")
+    
+    # 等待用户输入退出
+    try:
+        while True:
+            user_input = input("输入 'exit' 退出程序: ")
+            if user_input.lower() == 'exit':  # 忽略大小写，允许 'exit' 退出
+                break
+        logging.info("程序已退出...")
+    except KeyboardInterrupt:
+        logging.info("程序被用户中断...")
+    except Exception as e:
+        logging.error(f"退出处理时发生错误: {e}")
+        logging.info("程序异常退出...")

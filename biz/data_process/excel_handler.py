@@ -2,236 +2,142 @@
 # 存放Excel处理相关的逻辑
 
 import logging
+from utils import ExcelColumnHelper, is_valid_value, is_valid_name, ColumnMappings, ExcelColumns
+from biz.data_process.score_transformers import ScoreTransformer, TotalCountTransformer
+from biz.data_process.date_validator import DateValidator
 
-def update_excel_data(ws, index, anime):
+def update_excel_data(ws, index, anime, col_helper=None):
     """
-    更新Excel表格中的数据，每次写入单元格时都进行try-except，
-    以防止单个操作出错导致整个程序停止。
+    更新Excel表格中的数据，使用列名定位和模块化的数据处理。
+    每次写入单元格时都进行try-except，以防止单个操作出错导致整个程序停止。
+    
+    Args:
+        ws: Excel工作表对象
+        index: 行索引
+        anime: 动画对象
+        col_helper: Excel列助手，如果为None则创建新实例
     """
-    current_row = ws[index + 3]  # DataFrame是从0开始的，而Excel是从1开始的，且第一行通常是表头
-    if current_row[0].value == anime.original_name:  # 匹配原始名称
+    # 如果没有传入列助手，则创建新实例
+    if col_helper is None:
+        col_helper = ExcelColumnHelper(ws)
+    
+    # 计算实际行号（DataFrame从0开始，Excel从1开始，且有表头）
+    row_num = index + 3
+    current_row = ws[row_num]
+    
+    # 匹配原始名称
+    if current_row[0].value != anime.original_name:
+        logging.warning(f"行 {row_num} 的原始名称不匹配，跳过更新")
+        return
+    
+    # 获取转换后的评分和人数
+    transformed_scores = ScoreTransformer.get_transformed_scores(anime)
+    transformed_totals = TotalCountTransformer.get_transformed_totals(anime)
 
-        # 定义不可用值
-        unavailable_values = [
-            'No score available', 'No results found', '', None,
-            'No href found', 'No Filmarks score found', 'No Filmarks results',
-            'N/A', 'No score found', 'No AniList results',
-            'Error with AniList API', 'No response results'
-        ]
+    # ---------------------各平台数据写入---------------------
+    # 平台名称映射
+    platform_key_mapping = {
+        "Bangumi": "bangumi",
+        "AniList": "anilist", 
+        "MyAnimeList": "myanimelist",
+        "Filmarks": "filmarks"
+    }
+    
+    for platform_name, mapping in ColumnMappings.SCORE_MAPPINGS.items():
+        platform_key = platform_key_mapping[platform_name]
+        
+        if platform_name == "Filmarks":
+            data_mapping = {
+                "original_score": (mapping["original_score"], transformed_scores[platform_key]),
+                "doubled_score": (mapping["doubled_score"], transformed_scores['filmarks_doubled']),
+                "total": (mapping["total"], transformed_totals[platform_key])
+            }
+        else:
+            data_mapping = {
+                "score": (mapping["score"], transformed_scores[platform_key]),
+                "total": (mapping["total"], transformed_totals[platform_key])
+            }
+        
+        _write_platform_data(col_helper, current_row, anime, platform_name, data_mapping)
 
-        # 辅助函数，用于安全地将值转换为float，如果无法转换则返回None。
-        def safe_float(value):
-            """安全地将值转换为float，如果无法转换则返回None。"""
+    # ---------------------平台链接、名称写入---------------------
+    _write_platform_links_and_names(col_helper, row_num, anime, ColumnMappings.PLATFORM_URL_MAPPINGS)
+
+    # ---------------------放送日期处理---------------------
+    _process_release_date_validation(col_helper, row_num, anime)
+
+
+def _write_platform_data(col_helper, current_row, anime, platform_name, data_mapping):
+    """
+    写入平台数据的通用函数
+    Args:
+        col_helper: Excel列助手
+        current_row: 当前行
+        anime: 动画对象
+        platform_name: 平台名称（用于日志）
+        data_mapping: 数据映射字典，格式为 {"field_name": ("column_name", value)}
+    """
+    for field_name, (column_name, value) in data_mapping.items():
+        success = col_helper.safe_write(current_row, column_name, value)
+        if not success:
+            logging.error(f"Error writing {platform_name} {field_name} for {anime.original_name[:50]}")
+
+
+def _write_platform_links_and_names(col_helper, row_num, anime, platform_mapping):
+    """
+    写入平台链接和名称的通用函数
+    Args:
+        col_helper: Excel列助手
+        row_num: 行号
+        anime: 动画对象  
+        platform_mapping: 平台映射字典，格式为 {"platform": {"name_col": "列名", "url_col": "列名", "name_attr": "属性名", "url_attr": "属性名"}}
+    """
+    for platform, mapping in platform_mapping.items():
+        # 写入名称
+        name_value = getattr(anime, mapping['name_attr'], None)
+        if is_valid_name(name_value):
+            success = col_helper.safe_write(col_helper.ws[row_num], mapping['name_col'], name_value)
+            if not success:
+                logging.error(f"Error writing {platform} name for {anime.original_name[:50]}")
+        
+        # 写入URL
+        url_value = getattr(anime, mapping['url_attr'], None)
+        if url_value:
+            success = col_helper.safe_write_hyperlink(row_num, mapping['url_col'], url_value)
+            if not success:
+                logging.error(f"Error writing {platform} URL for {anime.original_name[:50]}")
+
+
+def _process_release_date_validation(col_helper, row_num, anime):
+    """
+    处理放送日期验证和错误记录
+    Args:
+        col_helper: Excel列助手
+        row_num: 行号
+        anime: 动画对象
+    """
+    try:
+        # 使用DateValidator进行日期验证
+        DateValidator.log_date_validation_result(anime)
+        
+        # 获取错误信息并写入到错误列（假设错误列名为"日期错误"，需要根据实际情况调整）
+        error_message = DateValidator.generate_date_error_message(anime)
+        
+        # 写入错误信息到Excel
+        success = col_helper.safe_write(col_helper.ws[row_num], ExcelColumns.DATE_ERROR, error_message)
+        if not success:
+            # 如果找不到错误列，尝试使用固定列号作为备选方案
             try:
-                return float(value)
-            except (ValueError, TypeError):
-                return None
-
-        # 辅助函数，用于判断值是否有效
-        def is_valid_value(value):
-            return value not in unavailable_values
-
-        # 辅助函数，用于安全地将数据写入Excel单元格
-        def write_value(cell, value):
-            """将值安全地写入Excel单元格，处理None值。"""
-            cell.value = value if value is not None else None
-
-        # ---------------------Bangumi数据写入---------------------
-        bgm_score = safe_float(anime.score_bgm)
-        bgm_total = safe_float(anime.bangumi_total)
-        try:
-            write_value(current_row[2], bgm_score if is_valid_value(anime.score_bgm) else None)
-        except Exception as e:
-            logging.error(f"Error writing Bangumi score for {anime.original_name[:50]}: {e}")
-        try:
-            write_value(current_row[3], bgm_total if is_valid_value(anime.bangumi_total) else None)
-        except Exception as e:
-            logging.error(f"Error writing Bangumi total for {anime.original_name[:50]}: {e}")
-
-        # ---------------------AniList数据写入---------------------
-        al_score = safe_float(anime.score_al)
-        al_total = safe_float(anime.anilist_total)
-        # AniList评分通常是满100，所以这里做除以10的处理
-        try:
-            write_value(
-                current_row[4],
-                f"{al_score / 10:.1f}" if (is_valid_value(anime.score_al) and al_score is not None) else None)
-        except Exception as e:
-            logging.error(f"Error writing AniList score for {anime.original_name[:50]}: {e}")
-        try:
-            write_value(
-                current_row[5],
-                al_total if is_valid_value(anime.anilist_total) else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing AniList total for {anime.original_name[:50]}: {e}")
-
-        # ---------------------MyAnimeList数据写入---------------------
-        mal_score = safe_float(anime.score_mal)
-        mal_total = safe_float(anime.myanimelist_total)
-        try:
-            write_value(
-                current_row[6],
-                mal_score if is_valid_value(anime.score_mal) else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing MAL score for {anime.original_name[:50]}: {e}")
-        try:
-            write_value(
-                current_row[7],
-                mal_total if is_valid_value(anime.myanimelist_total) else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing MAL total for {anime.original_name[:50]}: {e}")
-
-        # ---------------------Filmarks数据写入---------------------
-        fm_score = safe_float(anime.score_fm)
-        try:
-            write_value(
-                current_row[8],
-                fm_score if is_valid_value(anime.score_fm) else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing Filmarks score for {anime.original_name[:50]}: {e}")
-        try:
-            write_value(
-                current_row[9],
-                fm_score * 2 if is_valid_value(anime.score_fm) and fm_score is not None else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing Filmarks \"乘2\"分数 for {anime.original_name[:50]}: {e}")
-        try:
-            write_value(
-                current_row[10],
-                anime.filmarks_total if is_valid_value(anime.filmarks_total) else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing Filmarks total for {anime.original_name[:50]}: {e}")
-
-        # ---------------------Bangumi 链接、名称写入---------------------
-        try:
-            write_value(
-                current_row[13],
-                anime.bangumi_name if anime.bangumi_name not in ['No name found', None] else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing Bangumi name for {anime.original_name[:50]}: {e}")
-        try:
-            if anime.bangumi_url:
-                ws.cell(row=index + 3, column=14).hyperlink = anime.bangumi_url
-        except Exception as e:
-            logging.error(f"Error writing Bangumi URL for {anime.original_name[:50]}: {e}")
-
-        # ---------------------AniList 链接、名称写入---------------------
-        try:
-            write_value(
-                current_row[14],
-                anime.anilist_name if anime.anilist_name not in ['No name found', None] else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing AniList name for {anime.original_name[:50]}: {e}")
-        try:
-            if anime.anilist_url:
-                ws.cell(row=index + 3, column=15).hyperlink = anime.anilist_url
-        except Exception as e:
-            logging.error(f"Error writing AniList URL for {anime.original_name[:50]}: {e}")
-
-        # ---------------------MyAnimeList 链接、名称写入---------------------
-        try:
-            write_value(
-                current_row[15],
-                anime.myanimelist_name if anime.myanimelist_name not in ['No name found', None] else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing MAL name for {anime.original_name[:50]}: {e}")
-        try:
-            if anime.myanimelist_url:
-                ws.cell(row=index + 3, column=16).hyperlink = anime.myanimelist_url
-        except Exception as e:
-            logging.error(f"Error writing MAL URL for {anime.original_name[:50]}: {e}")
-
-        # ---------------------Filmarks 链接、名称写入---------------------
-        try:
-            write_value(
-                current_row[16],
-                anime.filmarks_name if anime.filmarks_name not in ['No name found', None] else None
-            )
-        except Exception as e:
-            logging.error(f"Error writing Filmarks name for {anime.original_name[:50]}: {e}")
-        try:
-            if anime.filmarks_url:
-                ws.cell(row=index + 3, column=17).hyperlink = anime.filmarks_url
-        except Exception as e:
-            logging.error(f"Error writing Filmarks URL for {anime.original_name[:50]}: {e}")
-
-        # ---------------------放送日期写入---------------------
-        try:
-            error_cell = ws.cell(row=index + 3, column=18)
-
-            # 检查哪些平台的日期数据缺失
-            missing_platforms = []
-            if not anime.bangumi_subject_Date:
-                missing_platforms.append("bangumi")
-            if not anime.myanimelist_subject_Date:
-                missing_platforms.append("myanimelist")
-            if not anime.anilist_subject_Date:
-                missing_platforms.append("anilist")
-            if not anime.filmarks_subject_Date:
-                missing_platforms.append("filmarks")
-
-            error_message = ""
-            # 如果有缺失的平台
-            if missing_platforms:
-                missing_msg = "/".join(missing_platforms) + "放送日期不存在"
-                logging.info(missing_msg)
-                error_message = missing_msg
-                error_cell.value = missing_msg
-
-                # 获取有日期数据的平台及其值
-                valid_dates = {}
-                if anime.bangumi_subject_Date:
-                    valid_dates["Bangumi"] = anime.bangumi_subject_Date
-                if anime.myanimelist_subject_Date:
-                    valid_dates["MAL"] = anime.myanimelist_subject_Date
-                if anime.anilist_subject_Date:
-                    valid_dates["AniList"] = anime.anilist_subject_Date
-                if anime.filmarks_subject_Date:
-                    valid_dates["Filmarks"] = anime.filmarks_subject_Date
-
-                # 判断剩余的日期是否一致
-                if len(valid_dates) > 1:
-                    dates = list(valid_dates.values())
-                    all_same = all(date == dates[0] for date in dates)
-
-                    if not all_same:
-                        diff_str = "; ".join([f"{platform}: {date}" for platform, date in valid_dates.items()])
-                        logging.info("存在的平台放送日期不相同: " + diff_str)
-                        error_message += "; " + diff_str
-                        error_cell.value += "; " + diff_str
-            else:
-                # 所有平台都有日期数据，判断是否一致
-                if (anime.bangumi_subject_Date == anime.myanimelist_subject_Date ==
-                        anime.anilist_subject_Date == anime.filmarks_subject_Date):
-                    logging.info("四个平台的开播日期相同: " + anime.bangumi_subject_Date)
-                    error_cell.value = ""
-                    error_message = ""
-                else:
-                    diff_str = (f"Bangumi: {anime.bangumi_subject_Date}; "
-                                f"AniList: {anime.anilist_subject_Date}; "
-                                f"MAL: {anime.myanimelist_subject_Date}; "
-                                f"Filmarks: {anime.filmarks_subject_Date}")
-                    logging.info("四个平台的开播日期不相同: " + diff_str)
-                    error_cell.value = diff_str
-                    error_message = diff_str
-
-            # 如果有错误信息，则添加到date_error列表
-            if error_message:
-                from main import date_error
-                date_error.append({
-                    "name": anime.original_name,
-                    "error": error_message
-                })
-
-        except Exception as e:
-            logging.error(f"在处理索引 {index} 时发生错误: {e}")
-            pass
+                col_helper.ws.cell(row=row_num, column=18).value = error_message
+            except Exception as e:
+                logging.error(f"无法写入日期错误信息: {e}")
+        
+        # 如果有错误，添加到全局错误列表
+        if DateValidator.should_add_to_error_list(anime):
+            error_entry = DateValidator.create_date_error_entry(anime)
+            if error_entry:
+                from utils import date_error
+                date_error.append(error_entry)
+                
+    except Exception as e:
+        logging.error(f"处理日期验证时发生错误: {e}")
