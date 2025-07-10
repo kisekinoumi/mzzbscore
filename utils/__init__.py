@@ -26,7 +26,9 @@ __all__ = [
     'INVALID_NAMES',           # 从data_validators模块
     'ExcelColumns',            # 从excel_columns模块
     'ColumnMappings',          # 从excel_columns模块
-    'COLUMN_NAMES'             # 从excel_columns模块
+    'COLUMN_NAMES',            # 从excel_columns模块
+    'LinkParser',              # 从link_parser模块
+    'UrlChecker'               # 从link_parser模块
 ]
 
 # 从network模块导入
@@ -53,3 +55,6 @@ from utils.data_validators import (
 
 # 从excel_columns模块导入
 from utils.excel_columns import ExcelColumns, ColumnMappings, COLUMN_NAMES
+
+# 从link_parser模块导入
+from utils.link_parser import LinkParser, UrlChecker

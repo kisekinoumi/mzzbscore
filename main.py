@@ -6,7 +6,7 @@ from openpyxl import load_workbook
 
 # 导入自定义模块
 from models import Anime
-from utils import preprocess_name, setup_logger, date_error
+from utils import preprocess_name, setup_logger, date_error, UrlChecker
 from utils.global_variables import FILE_PATH, update_constants
 from biz.extractors import (
     extract_bangumi_data,
@@ -51,9 +51,36 @@ try:
         if pd.isna(row['原名']):
             logging.warning(f"Skipping row {index} because the original name is NaN.")
             continue  # 跳过这一行
+        
         anime = Anime(original_name=row['原名'])  # 获取每行的"原名"列作为原始名称
         logging.info(str(anime))
-        # 预处理名称
+        
+        # 获取当前行的Excel行对象用于链接检查
+        excel_row = ws[index + 3]  # DataFrame从0开始，Excel从1开始，且有表头，所以+3
+        
+        # 检查当前行是否已有链接数据
+        existing_urls = UrlChecker.check_row_urls(excel_row, col_helper)
+        
+        # 如果找到链接，预先设置到anime对象中
+        if existing_urls['bangumi']:
+            anime.bangumi_url = existing_urls['bangumi']
+        if existing_urls['anilist']:
+            anime.anilist_url = existing_urls['anilist']
+        if existing_urls['myanimelist']:
+            anime.myanimelist_url = existing_urls['myanimelist']
+        if existing_urls['filmarks']:
+            anime.filmarks_url = existing_urls['filmarks']
+        
+        # 判断是否有任何现有链接
+        has_existing_links = UrlChecker.has_any_url(existing_urls)
+        available_platforms = UrlChecker.get_available_platforms(existing_urls)
+        
+        if has_existing_links:
+            logging.info(f"发现已有链接的平台: {', '.join(available_platforms)}")
+        else:
+            logging.info("未发现已有链接，将进行搜索模式")
+        
+        # 预处理名称（仍然需要，用于没有链接的平台）
         processed_name = preprocess_name(anime.original_name)
 
         # 提取数据 - 并发执行
