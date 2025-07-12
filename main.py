@@ -23,6 +23,7 @@ from openpyxl import load_workbook
 from models import Anime
 from utils import preprocess_name, setup_logger, date_error, UrlChecker, setup_twitter_config
 from utils.core.global_variables import FILE_PATH, update_constants
+from utils.network import setup_proxy, get_proxy_status
 from src.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
@@ -35,6 +36,20 @@ import concurrent.futures
 
 # 配置日志
 logging = setup_logger()
+
+# 第一步：代理检测和配置（程序运行的第一步）
+try:
+    proxy_config = setup_proxy()
+    if proxy_config:
+        logging.info(f"✅ 代理配置完成 - {get_proxy_status()}")
+    else:
+        logging.info(f"📡 网络配置完成 - {get_proxy_status()}")
+except Exception as e:
+    logging.error(f"代理配置过程中出现错误: {e}")
+    logging.info("程序将使用直连模式继续运行")
+
+# 输出分隔线，明确标识代理配置完成
+logging.info("=" * 50)
 
 # 强制清空日期错误列表，确保每次运行都是干净的开始
 date_error.clear()

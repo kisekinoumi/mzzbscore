@@ -10,6 +10,9 @@ MAX_RETRIES = 3
 REQUEST_TIMEOUT = 10  # 设置请求超时时间，单位为秒
 DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
 
+# 导入代理配置函数
+from .proxy_config import get_global_proxy
+
 # 简单的内存缓存，用于存储请求结果
 _request_cache = {}
 
@@ -47,14 +50,19 @@ def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=Non
             logging.debug(f"Using cached response for {url}")
             return cached_response
     
+    # 获取全局代理配置
+    proxies = get_global_proxy()
+    if proxies:
+        logging.debug(f"Using proxy for {url}: {proxies.get('http', 'N/A')}")
+    
     logging.info(f"Fetching data from {url} with method {method}")
     
     for attempt in range(MAX_RETRIES):
         try:
             if method == 'GET':
-                response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT, headers=headers)
+                response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT, headers=headers, proxies=proxies)
             elif method == 'POST':
-                response = requests.post(url, json=data, timeout=REQUEST_TIMEOUT, headers=headers)
+                response = requests.post(url, json=data, timeout=REQUEST_TIMEOUT, headers=headers, proxies=proxies)
             else:
                 raise ValueError(f"Unsupported method: {method}")
 
@@ -83,6 +91,17 @@ def fetch_data_with_retry(url, params=None, data=None, method='GET', headers=Non
                 
             return response
 
+        except requests.exceptions.ProxyError as e:
+            # 代理错误，尝试直连
+            if proxies and attempt == 0:
+                logging.warning(f"Proxy error for {url}, trying direct connection: {e}")
+                proxies = None  # 清除代理，下次重试时使用直连
+                continue
+            else:
+                wait_time = 2 ** attempt * 5
+                logging.warning(f"Proxy error for {url} (Attempt {attempt + 1}/{MAX_RETRIES}): {e}. Waiting for {wait_time} seconds.")
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(wait_time)
         except requests.exceptions.Timeout as e:
             # 超时错误，可能需要更长的等待时间
             wait_time = 2 ** attempt * 10
