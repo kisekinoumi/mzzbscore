@@ -235,7 +235,7 @@ class TwitterFollowersAPI:
                 
                 thread = threading.Thread(target=run_in_thread)
                 thread.start()
-                thread.join(timeout=self.request_config.get('timeout', 30))
+                thread.join(timeout=self.request_config.get('timeout', 15))
                 
                 if thread.is_alive():
                     logging.error(f"获取 @{clean_username} 粉丝数超时")

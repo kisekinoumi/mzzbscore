@@ -235,7 +235,7 @@ class TwitterInteractiveConfig:
                     
                     thread = threading.Thread(target=run_test)
                     thread.start()
-                    thread.join(timeout=30)  # 30秒超时
+                    thread.join(timeout=10)  # 10秒超时
                     
                     if thread.is_alive():
                         self.logger.info("[ERROR] API连接测试超时")
@@ -425,7 +425,7 @@ class TwitterInteractiveConfig:
                     
                     thread = threading.Thread(target=run_test)
                     thread.start()
-                    thread.join(timeout=60)  # 增加到60秒超时，给API测试足够时间
+                    thread.join(timeout=10)  # 10秒超时
                     
                     if thread.is_alive():
                         self.logger.info("[ERROR] API初始化测试超时")
