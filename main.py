@@ -129,15 +129,18 @@ try:
                     logging.error(f"{extractor_name} extractor generated an exception: {exc}")
 
         # 如果 MAL 没有找到候选条目，但 AniList 搜到名称，则用 AniList 返回的名称重新搜索 MAL
-        if anime.score_mal == "No acceptable subject found" and anime.anilist_name:
+        mal_not_found = anime.score_mal in ["No acceptable subject found", "No results found"]
+        if mal_not_found and anime.anilist_name:
             logging.info("MAL候选未找到，尝试使用 AniList 返回的名称重新搜索 MAL")
             new_processed_name = preprocess_name(anime.anilist_name)
             extract_myanimelist_data(anime, new_processed_name)
         # 如果 AniList 没有找到候选条目，但 MAL 搜到名称，则用 MAL 返回的名称重新搜索 AniList
-        if anime.score_al == "No acceptable subject found" and anime.myanimelist_name:
+        anilist_not_found = anime.score_al in ["No acceptable subject found", "No AniList results"]
+        if anilist_not_found and anime.myanimelist_name:
             logging.info("AniList候选未找到，尝试使用 MAL 返回的名称重新搜索 AniList")
             new_processed_name = unescape(preprocess_name(anime.myanimelist_name))
             extract_anilist_data(anime, new_processed_name)
+
 
         # 获取Twitter粉丝数（如果找到了Twitter账号且配置成功）
         if hasattr(anime, 'twitter_username') and anime.twitter_username:
