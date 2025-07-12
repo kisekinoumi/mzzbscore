@@ -80,8 +80,8 @@ def verify_proxy_twitter(proxy_dict: Dict[str, str]) -> bool:
     """
     # 推特相关的测试URL（按优先级排序）
     twitter_test_urls = [
-        "https://twitter.com",
-        "https://x.com", 
+        "https://x.com",
+        "https://twitter.com", 
         "https://api.twitter.com",
     ]
     
