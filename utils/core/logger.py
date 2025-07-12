@@ -1,5 +1,7 @@
+# -*- coding: utf-8 -*-
 import logging
 import sys
+import io
 
 def setup_logger(log_file_path='mzzb_score.log'):
     """
@@ -11,12 +13,18 @@ def setup_logger(log_file_path='mzzb_score.log'):
     Returns:
         配置好的logger对象
     """
+    # 设置控制台输出编码
+    console_handler = logging.StreamHandler()
+    if sys.platform == 'win32':
+        # 在Windows系统中，特别是exe环境中，确保控制台输出使用UTF-8编码
+        console_handler.stream = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    
     # 配置日志
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[
-                            logging.FileHandler(log_file_path, mode='w', encoding='utf-8'),  # 'w' 覆盖模式
-                            logging.StreamHandler(sys.stdout)  # 同时输出到控制台
+                            logging.FileHandler(log_file_path, mode='w', encoding='utf-8'),  # 文件输出UTF-8
+                            console_handler  # 控制台输出UTF-8
                         ])
     
     # 控制第三方库的详细日志输出

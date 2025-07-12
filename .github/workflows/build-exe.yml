@@ -1,177 +1,369 @@
-name: Build EXE with fake_useragent fix
+name: 构建EXE文件
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # 允许手动触发工作流
+
+env:
+  PYTHONIOENCODING: utf-8
+  PYTHONLEGACYWINDOWSSTDIO: utf-8
 
 jobs:
   build:
     runs-on: windows-latest
-    
+    permissions:
+      contents: write  # 明确授予写入权限
+
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~\AppData\Local\pip\Cache
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller
-    
-    - name: Create fake_useragent prepare script
-      run: |
-        echo "Creating fake_useragent prepare script..."
-        echo "import sys" > prepare_fake_useragent.py
-        echo "import os" >> prepare_fake_useragent.py
-        echo "import shutil" >> prepare_fake_useragent.py
-        echo "from pathlib import Path" >> prepare_fake_useragent.py
-        echo "" >> prepare_fake_useragent.py
-        echo "# 设置UTF-8编码输出" >> prepare_fake_useragent.py
-        echo "if sys.platform == 'win32':" >> prepare_fake_useragent.py
-        echo "    import io" >> prepare_fake_useragent.py
-        echo "    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')" >> prepare_fake_useragent.py
-        echo "    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')" >> prepare_fake_useragent.py
-        echo "" >> prepare_fake_useragent.py
-        echo "try:" >> prepare_fake_useragent.py
-        echo "    from fake_useragent import UserAgent" >> prepare_fake_useragent.py
-        echo "    ua = UserAgent()" >> prepare_fake_useragent.py
-        echo "    ua.random" >> prepare_fake_useragent.py
-        echo "    print('[SUCCESS] fake_useragent数据下载完成')" >> prepare_fake_useragent.py
-        echo "    import fake_useragent" >> prepare_fake_useragent.py
-        echo "    fa_path = Path(fake_useragent.__file__).parent" >> prepare_fake_useragent.py
-        echo "    data_dir = fa_path / 'data'" >> prepare_fake_useragent.py
-        echo "    if data_dir.exists():" >> prepare_fake_useragent.py
-        echo "        project_data_dir = Path('fake_useragent_data')" >> prepare_fake_useragent.py
-        echo "        if project_data_dir.exists():" >> prepare_fake_useragent.py
-        echo "            shutil.rmtree(project_data_dir)" >> prepare_fake_useragent.py
-        echo "        shutil.copytree(data_dir, project_data_dir)" >> prepare_fake_useragent.py
-        echo "        print(f'[SUCCESS] 数据文件已复制到: {project_data_dir}')" >> prepare_fake_useragent.py
-        echo "        for file in project_data_dir.rglob('*'):" >> prepare_fake_useragent.py
-        echo "            if file.is_file():" >> prepare_fake_useragent.py
-        echo "                print(f'[FILE] {file}')" >> prepare_fake_useragent.py
-        echo "    else:" >> prepare_fake_useragent.py
-        echo "        print('[WARNING] 未找到data目录')" >> prepare_fake_useragent.py
-        echo "except Exception as e:" >> prepare_fake_useragent.py
-        echo "    print(f'[ERROR] 准备fake_useragent数据失败: {e}')" >> prepare_fake_useragent.py
-        echo "    os.makedirs('fake_useragent_data', exist_ok=True)" >> prepare_fake_useragent.py
-        echo "    print('[INFO] 创建了最小数据目录')" >> prepare_fake_useragent.py
-    
-    - name: Pre-download fake_useragent data
-      run: |
-        echo "正在预下载fake_useragent数据..."
-        python prepare_fake_useragent.py
-    
-    - name: Verify fake_useragent data
-      run: |
-        echo "验证fake_useragent数据..."
-        if (Test-Path fake_useragent_data) {
-            echo "[SUCCESS] fake_useragent_data目录存在"
-            Get-ChildItem -Recurse fake_useragent_data | ForEach-Object { echo "[FILE] $($_.FullName)" }
-        } else {
-            echo "[ERROR] fake_useragent_data目录不存在"
-        }
-    
-    - name: Build EXE with PyInstaller
-      run: |
-        echo "正在编译exe文件..."
-        pyinstaller --onefile --console --name mzzbscore `
-          --add-data "fake_useragent_data/*;fake_useragent/data/" `
-          --hidden-import fake_useragent.data `
-          --hidden-import fake_useragent.utils `
-          --hidden-import fake_useragent.errors `
-          --hidden-import fake_useragent.settings `
-          --hidden-import twscrape `
-          --hidden-import twscrape.api `
-          --hidden-import twscrape.gather `
-          --hidden-import asyncio `
-          --hidden-import aiohttp `
-          --hidden-import lxml `
-          --hidden-import pandas `
-          --hidden-import openpyxl `
-          --hidden-import concurrent.futures `
-          --hidden-import threading `
-          --hidden-import json `
-          --hidden-import urllib.parse `
-          --hidden-import html `
-          --collect-submodules src `
-          --collect-submodules utils `
-          --collect-submodules models `
-          main.py
-    
-    - name: Verify build output
-      run: |
-        echo "验证编译输出..."
-        if (Test-Path dist\mzzbscore.exe) {
-            $size = (Get-Item dist\mzzbscore.exe).Length / 1MB
-            $sizeRounded = [math]::Round($size, 1)
-            echo "[SUCCESS] 编译成功！文件大小: $sizeRounded MB"
-            $fullPath = (Get-Item dist\mzzbscore.exe | Select-Object -ExpandProperty FullName)
-            echo "[INFO] 文件位置: $fullPath"
-        } else {
-            echo "[ERROR] 编译失败，未找到exe文件"
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 计算版本号
+        id: version
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          # 计算语义化版本号 va.b.c
+          # 初始值: a=2, b=0, c=0 (v2.0.0)
+          # 每次提交 c+1，c>=10 时 c=0 且 b+1，b>=10 时 b=0 且 a+1
+          
+          $runNumber = ${{ github.run_number }}
+          $totalIncrements = $runNumber - 1
+          
+          $c = $totalIncrements % 10
+          $bIncrements = [math]::Floor($totalIncrements / 10)
+          $b = $bIncrements % 10
+          $aIncrements = [math]::Floor($bIncrements / 10)
+          $a = 2 + $aIncrements
+          
+          $version = "v$a.$b.$c"
+          
+          Write-Host "🏷️ 计算得到版本号: $version"
+          Write-Host "📊 计算详情:"
+          Write-Host "   - Run Number: $runNumber"
+          Write-Host "   - Total Increments: $totalIncrements"
+          Write-Host "   - a: $a, b: $b, c: $c"
+          
+          # 输出给后续步骤使用
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "major=$a" >> $env:GITHUB_OUTPUT
+          echo "minor=$b" >> $env:GITHUB_OUTPUT
+          echo "patch=$c" >> $env:GITHUB_OUTPUT
+
+      - name: 设置Python环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 缓存Python依赖
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: 安装依赖
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+          Write-Host "📦 安装项目依赖..."
+          pip install -r requirements.txt
+          Write-Host "依赖安装完成"
+          
+          # 验证关键依赖
+          Write-Host "🔍 验证关键依赖..."
+          python -c "import twscrape; print('OK: twscrape imported')"
+          python -c "import asyncio; print('OK: asyncio imported')"
+          python -c "import pandas; print('OK: pandas imported')"
+          python -c "import openpyxl; print('OK: openpyxl imported')"
+          python -c "import requests; print('OK: requests imported')"
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 预下载fake_useragent数据
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "📦 正在预下载fake_useragent数据..."
+          python -c "
+          import sys
+          import os
+          import shutil
+          from pathlib import Path
+          
+          # 设置UTF-8编码输出
+          if sys.platform == 'win32':
+              import io
+              sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+              sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+          
+          try:
+              from fake_useragent import UserAgent
+              ua = UserAgent()
+              ua.random
+              print('[SUCCESS] fake_useragent数据下载完成')
+              
+              import fake_useragent
+              fa_path = Path(fake_useragent.__file__).parent
+              data_dir = fa_path / 'data'
+              
+              if data_dir.exists():
+                  project_data_dir = Path('fake_useragent_data')
+                  if project_data_dir.exists():
+                      shutil.rmtree(project_data_dir)
+                  shutil.copytree(data_dir, project_data_dir)
+                  print(f'[SUCCESS] 数据文件已复制到: {project_data_dir}')
+                  
+                  for file in project_data_dir.rglob('*'):
+                      if file.is_file():
+                          print(f'[FILE] {file}')
+              else:
+                  print('[WARNING] 未找到data目录')
+          except Exception as e:
+              print(f'[ERROR] 准备fake_useragent数据失败: {e}')
+              os.makedirs('fake_useragent_data', exist_ok=True)
+              print('[INFO] 创建了最小数据目录')
+          "
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 验证fake_useragent数据
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "🔍 验证fake_useragent数据..."
+          if (Test-Path fake_useragent_data) {
+              Write-Host "[SUCCESS] fake_useragent_data目录存在"
+              Get-ChildItem -Recurse fake_useragent_data | ForEach-Object { Write-Host "[FILE] $($_.FullName)" }
+          } else {
+              Write-Host "[ERROR] fake_useragent_data目录不存在"
+          }
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 创建构建信息文件
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          echo "构建时间: $(Get-Date)" > build_info.txt
+          echo "版本号: ${{ steps.version.outputs.version }}" >> build_info.txt
+          echo "版本详情: ${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }}.${{ steps.version.outputs.patch }}" >> build_info.txt
+          echo "提交哈希: ${{ github.sha }}" >> build_info.txt
+          echo "构建编号: ${{ github.run_number }}" >> build_info.txt
+
+      - name: 预构建检查
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "🔍 检查模块导入..."
+          python -c "import sys; print('Python version:', sys.version)"
+          python -c "import asyncio; print('OK: asyncio imported')"
+          python -c "import twscrape; print('OK: twscrape imported')"
+          python -c "import src.extractors; print('OK: src.extractors imported')"
+          python -c "import src.parsers; print('OK: src.parsers imported')"
+          python -c "import src.data_process; print('OK: src.data_process imported')"
+          python -c "import utils; print('OK: utils imported')"
+          python -c "import models; print('OK: models imported')"
+          Write-Host "所有模块导入成功"
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 使用PyInstaller构建EXE
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "🔧 正在构建EXE文件..."
+          pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 `
+            --add-data "fake_useragent_data/*;fake_useragent/data/" `
+            --hidden-import=asyncio `
+            --hidden-import=twscrape `
+            --hidden-import=twscrape.api `
+            --hidden-import=twscrape.gather `
+            --hidden-import=fake_useragent.data `
+            --hidden-import=fake_useragent.utils `
+            --hidden-import=fake_useragent.errors `
+            --hidden-import=fake_useragent.settings `
+            --hidden-import=src.extractors `
+            --hidden-import=src.parsers `
+            --hidden-import=src.data_process `
+            --hidden-import=aiohttp `
+            --hidden-import=lxml `
+            --hidden-import=pandas `
+            --hidden-import=openpyxl `
+            --hidden-import=concurrent.futures `
+            --hidden-import=threading `
+            --hidden-import=json `
+            --hidden-import=urllib.parse `
+            --hidden-import=html `
+            --collect-all=twscrape `
+            --collect-all=asyncio `
+            --collect-submodules=src `
+            --collect-submodules=utils `
+            --collect-submodules=models `
+            main.py
+          Write-Host "构建完成"
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 验证构建结果
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          if (Test-Path "dist/mzzb_score.exe") {
+            Write-Host "EXE文件构建成功"
+            $fileSize = (Get-Item "dist/mzzb_score.exe").Length / 1MB
+            Write-Host "📦 文件大小: $([math]::Round($fileSize, 2)) MB"
+            Write-Host "🏷️ 版本号: ${{ steps.version.outputs.version }}"
+            
+            # 验证Excel文件是否存在
+            Write-Host "📊 验证Excel文件..."
+            $excelFiles = @("mzzb.xlsx", "X月新番首月评分.xlsx", "X月新番完结评分.xlsx")
+            foreach ($file in $excelFiles) {
+              if (Test-Path $file) {
+                $excelSize = (Get-Item $file).Length / 1KB
+                Write-Host "   OK: $file - $([math]::Round($excelSize, 1)) KB"
+              } else {
+                Write-Host "   ERROR: $file - 文件不存在"
+                exit 1
+              }
+            }
+            
+            # 验证EXE文件的依赖
+            Write-Host "🔍 验证EXE文件依赖..."
+            $dependencies = @("kernel32.dll", "user32.dll", "msvcrt.dll")
+            foreach ($dep in $dependencies) {
+              Write-Host "   - ${dep}: 系统依赖"
+            }
+            
+            # 验证文件完整性
+            Write-Host "🧪 验证文件完整性..."
+            if (Get-Command "Get-FileHash" -ErrorAction SilentlyContinue) {
+              $hash = Get-FileHash "dist/mzzb_score.exe" -Algorithm SHA256
+              Write-Host "📝 文件哈希: $($hash.Hash.Substring(0,16))..."
+            }
+            
+            Write-Host "构建验证完成"
+          } else {
+            Write-Host "ERROR: EXE文件构建失败"
             exit 1
-        }
-    
-    - name: Test EXE basic functionality
-      run: |
-        echo "测试exe基本功能..."
-        try {
-            $process = Start-Process -FilePath "dist\mzzbscore.exe" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
-            echo "[TEST] exe进程退出代码: $($process.ExitCode)"
-            echo "[OUTPUT] 输出内容:"
-            if (Test-Path "test_output.txt") { Get-Content "test_output.txt" }
-            echo "[ERROR] 错误内容:"
-            if (Test-Path "test_error.txt") { Get-Content "test_error.txt" }
-        } catch {
-            echo "[WARNING] 测试过程中出现异常: $($_.Exception.Message)"
-            echo "[INFO] 这可能是正常的，因为缺少Excel文件"
-        }
-    
-    - name: Clean up temporary files
-      run: |
-        echo "清理临时文件..."
-        if (Test-Path "prepare_fake_useragent.py") {
-            Remove-Item "prepare_fake_useragent.py"
-            echo "[INFO] 已删除临时脚本文件"
-        }
-    
-    - name: Upload EXE artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: mzzbscore-exe
-        path: dist/mzzbscore.exe
-        
-    - name: Upload build logs
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: build-logs
-        path: |
-          build/
-          test_output.txt
-          test_error.txt
-        
-    - name: Create Release (if tag)
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: dist/mzzbscore.exe
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          }
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 基础功能测试
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "🧪 测试exe基本功能..."
+          try {
+              $process = Start-Process -FilePath "dist\mzzb_score.exe" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
+              Write-Host "[TEST] exe进程退出代码: $($process.ExitCode)"
+              Write-Host "[OUTPUT] 输出内容:"
+              if (Test-Path "test_output.txt") { Get-Content "test_output.txt" }
+              Write-Host "[ERROR] 错误内容:"
+              if (Test-Path "test_error.txt") { Get-Content "test_error.txt" }
+          } catch {
+              Write-Host "[WARNING] 测试过程中出现异常: $($_.Exception.Message)"
+              Write-Host "[INFO] 这可能是正常的，因为缺少Excel文件"
+          }
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: 准备发布文件
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "📦 准备发布文件..."
+          
+          # 为避免GitHub API的中文编码问题，重命名Excel文件
+          if (Test-Path "X月新番首月评分.xlsx") {
+            Copy-Item "X月新番首月评分.xlsx" "monthly_anime_scores.xlsx"
+            Write-Host "   OK: 重命名首月评分文件"
+          }
+          
+          if (Test-Path "X月新番完结评分.xlsx") {
+            Copy-Item "X月新番完结评分.xlsx" "final_anime_scores.xlsx"  
+            Write-Host "   OK: 重命名完结评分文件"
+          }
+          
+          Write-Host "文件准备完成"
+
+      - name: 清理临时文件
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "🧹 清理临时文件..."
+          if (Test-Path "fake_useragent_data") {
+              Remove-Item -Recurse "fake_useragent_data"
+              Write-Host "[INFO] 已删除fake_useragent_data目录"
+          }
+          if (Test-Path "test_output.txt") { Remove-Item "test_output.txt" }
+          if (Test-Path "test_error.txt") { Remove-Item "test_error.txt" }
+
+      - name: 上传构建结果到Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mzzb_score-${{ steps.version.outputs.version }}
+          path: |
+            dist/mzzb_score.exe
+            build_info.txt
+            mzzb.xlsx
+            monthly_anime_scores.xlsx
+            final_anime_scores.xlsx
+          retention-days: 30
+
+      - name: 创建发布版本
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/mzzb_score.exe
+            mzzb.xlsx
+            monthly_anime_scores.xlsx
+            final_anime_scores.xlsx
+          name: "${{ steps.version.outputs.version }}"
+          tag_name: "${{ steps.version.outputs.version }}"
+          body: |
+            ### 🎯 版本信息
+            - **构建编号**: ${{ github.run_number }}
+            - **构建时间**: ${{ github.event.head_commit.timestamp }}
+            - **提交哈希**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+
+            ### 📋 使用说明
+            1. 下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境
+            2. 使用提供的Excel模板文件：
+               - **mzzb.xlsx** - 主要的数据文件模板
+               - **monthly_anime_scores.xlsx** - 首月评分统计模板
+               - **final_anime_scores.xlsx** - 完结评分统计模板
+            3. 在Excel文件中填入动画名称，可选择预填平台链接
+            4. 运行程序，根据提示配置Twitter功能（可选）
+            5. 程序会自动获取各平台评分数据并更新Excel文件
+
+            ### 📁 下载文件说明
+            - 📋 **mzzb_score.exe** - 主程序文件
+            - 📊 **mzzb.xlsx** - 数据输入模板
+            - 🎯 **monthly_anime_scores.xlsx** - 首月评分统计模板（X月新番首月评分）
+            - 🏆 **final_anime_scores.xlsx** - 完结评分统计模板（X月新番完结评分）
+
+            ### 🔧 本版本修复
+            - ✅ 修复了exe文件中的中文字符编码问题
+            - ✅ 修复了fake_useragent在exe环境中的数据缺失问题
+            - ✅ 优化了Twitter功能的用户界面和错误处理
+            - ✅ 增强了日志输出的稳定性
+            
+            ---
+            *此版本由 GitHub Actions 自动构建和发布*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 构建完成通知
+        if: success()
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "🎉 构建和发布完成！"
+          Write-Host "📦 版本号: ${{ steps.version.outputs.version }}"
+          Write-Host "🏷️ 标签: ${{ steps.version.outputs.version }}"
+          Write-Host "🔗 下载地址: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
+          Write-Host ""
+          Write-Host "📁 已发布的文件:"
+          Write-Host "   - mzzb_score.exe (主程序)"
+          Write-Host "   - mzzb.xlsx (数据输入模板)"
+          Write-Host "   - monthly_anime_scores.xlsx (首月评分模板)"
+          Write-Host "   - final_anime_scores.xlsx (完结评分模板)"

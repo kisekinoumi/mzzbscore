@@ -1,3 +1,18 @@
+# -*- coding: utf-8 -*-
+import sys
+import os
+
+# 设置UTF-8编码，确保在exe环境中正确处理中文字符
+if sys.platform == 'win32':
+    import io
+    if hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    if hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# 设置环境变量
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 import time
 from html import unescape
 
