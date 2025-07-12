@@ -1,4 +1,4 @@
-# src/extractors/twitter_extractor.py
+# src/extractors/twitter.py
 # Twitter粉丝数据提取器模块
 
 import logging

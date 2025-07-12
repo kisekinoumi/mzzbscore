@@ -354,7 +354,7 @@ class TwitterInteractiveConfig:
                             print("✅ Twitter配置测试和初始化完成")
                             
                             # 预初始化TwitterFollowersAPI
-                            from src.extractors.twitter_extractor import TwitterFollowersHelper
+                            from src.extractors.twitter import TwitterFollowersHelper
                             # 重置实例以确保使用新的配置
                             TwitterFollowersHelper.reset_instance()
                             # 获取实例，这将触发初始化
@@ -461,7 +461,7 @@ class TwitterInteractiveConfig:
         
         # 重置TwitterFollowersHelper实例以确保立即生效
         try:
-            from src.extractors.twitter_extractor import TwitterFollowersHelper
+            from src.extractors.twitter import TwitterFollowersHelper
             TwitterFollowersHelper.reset_instance()
         except ImportError:
             pass  # 如果模块未导入则忽略

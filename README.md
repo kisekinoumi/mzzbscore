@@ -29,7 +29,7 @@ MZZB Score 是一个动画评分聚合工具，能够自动从多个知名动画
 ## 使用方法
 
 1. 准备一个Excel文件（默认名称为`mzzb.xlsx`），格式如下：
-   - A1单元格：目标年份（如"2024年7月"）
+   - A1单元格：当前年份（如"2025年XXXXXXXXXXX"）（一定要改）
    - 从第二行开始，包含一个"原名"列，填入需要查询的动画名称
    - **可选**：预填各平台URL列（`Bangumi_url`、`Anilist_url`、`Myanimelist_url`、`Filmarks_url`），程序将优先使用这些链接直接提取数据
 2. 运行程序，程序会自动执行以下流程：
@@ -105,7 +105,7 @@ mzzbscore/
 │   │   ├── anilist.py         # AniList数据提取器
 │   │   ├── myanimelist.py     # MyAnimeList数据提取器
 │   │   ├── filmarks.py        # Filmarks数据提取器
-│   │   └── twitter_extractor.py   # Twitter粉丝数提取器
+│   │   └── twitter.py            # Twitter粉丝数提取器
 │   ├── parsers/               # 业务专用解析器
 │   │   ├── __init__.py        # 解析器导出接口
 │   │   ├── base_parser.py     # 基础解析器类

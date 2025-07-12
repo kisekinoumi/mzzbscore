@@ -5,7 +5,7 @@ from .bangumi import extract_bangumi_data
 from .myanimelist import extract_myanimelist_data
 from .anilist import extract_anilist_data
 from .filmarks import extract_filmarks_data
-from .twitter_extractor import TwitterFollowersHelper
+from .twitter import TwitterFollowersHelper
 
 # 导入基础提取器组件
 from .base_extractor import BaseExtractor, CandidateValidator, ExtractorErrorHandler, ExtractorLogger
