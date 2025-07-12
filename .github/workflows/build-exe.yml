@@ -194,7 +194,6 @@ jobs:
         with:
           files: |
             dist/mzzb_score.exe
-            build_info.txt
             mzzb.xlsx
             monthly_anime_scores.xlsx
             final_anime_scores.xlsx
@@ -242,4 +241,3 @@ jobs:
           Write-Host "   - mzzb.xlsx (数据输入模板)"
           Write-Host "   - monthly_anime_scores.xlsx (首月评分模板)"
           Write-Host "   - final_anime_scores.xlsx (完结评分模板)"
-          Write-Host "   - build_info.txt (构建信息)"
