@@ -5,6 +5,7 @@ import logging
 from utils import ExcelColumnHelper, is_valid_value, is_valid_name, ColumnMappings, ExcelColumns, TwitterParser
 from src.data_process.score_transformers import ScoreTransformer, TotalCountTransformer
 from src.data_process.date_validator import DateValidator
+from src.extractors.twitter import TwitterFollowersHelper
 
 def update_excel_data(ws, index, anime, col_helper=None):
     """
@@ -118,7 +119,6 @@ def _write_platform_links_and_names(col_helper, row_num, anime, platform_mapping
             if not success:
                 logging.error(f"Error writing {platform} name for {anime.original_name[:50]}")
 
-
 def _write_social_media_data(col_helper, row_num, anime):
     """
     写入社交媒体数据（Twitter/X账号和粉丝数）
@@ -153,10 +153,13 @@ def _write_social_media_data(col_helper, row_num, anime):
             twitter_config = get_twitter_config()
             
             if twitter_config.is_enabled():
+                # 格式化粉丝数为千分位格式
+                formatted_followers = TwitterFollowersHelper.format_followers_count(anime.twitter_followers)
+                
                 # 写入粉丝数到X_FAN列
-                success = col_helper.safe_write(col_helper.ws[row_num], ExcelColumns.X_FAN, anime.twitter_followers)
+                success = col_helper.safe_write(col_helper.ws[row_num], ExcelColumns.X_FAN, formatted_followers)
                 if success:
-                    logging.info(f"已写入Twitter粉丝数: {anime.twitter_followers}")
+                    logging.info(f"已写入Twitter粉丝数: {formatted_followers}")
                 else:
                     logging.error(f"写入Twitter粉丝数失败: {anime.original_name[:50]}")
             else:

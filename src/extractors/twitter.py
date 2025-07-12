@@ -272,6 +272,38 @@ class TwitterFollowersHelper:
     
     _api_instance = None
     
+    @staticmethod
+    def format_followers_count(followers_count):
+        """
+        格式化粉丝数为千分位格式
+        Args:
+            followers_count: 粉丝数（可能是数字、字符串或错误信息）
+        Returns:
+            str: 格式化后的粉丝数字符串
+        """
+        if not followers_count:
+            return ""
+        
+        # 如果是错误信息，直接返回
+        error_messages = ['获取失败', '获取出错', '配置未成功', 'Request failed', 'Parse error']
+        if isinstance(followers_count, str) and any(msg in followers_count for msg in error_messages):
+            return followers_count
+        
+        try:
+            # 尝试转换为整数
+            if isinstance(followers_count, str):
+                # 移除可能的千分位符号和空格
+                clean_count = followers_count.replace(',', '').replace(' ', '')
+                followers_int = int(clean_count)
+            else:
+                followers_int = int(followers_count)
+            
+            # 格式化为千分位
+            return f"{followers_int:,}"
+        except (ValueError, TypeError):
+            # 如果转换失败，返回原始值
+            return str(followers_count)
+    
     @classmethod
     def get_api_instance(cls) -> TwitterFollowersAPI:
         """获取API实例（单例模式）"""
