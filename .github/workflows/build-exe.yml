@@ -158,6 +158,24 @@ jobs:
             exit 1
           }
 
+      - name: 准备发布文件
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+          Write-Host "📦 准备发布文件..."
+          
+          # 为避免GitHub API的中文编码问题，重命名Excel文件
+          if (Test-Path "X月新番首月评分.xlsx") {
+            Copy-Item "X月新番首月评分.xlsx" "monthly_anime_scores.xlsx"
+            Write-Host "   OK: 重命名首月评分文件"
+          }
+          
+          if (Test-Path "X月新番完结评分.xlsx") {
+            Copy-Item "X月新番完结评分.xlsx" "final_anime_scores.xlsx"  
+            Write-Host "   OK: 重命名完结评分文件"
+          }
+          
+          Write-Host "文件准备完成"
+
       - name: 上传构建结果到Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -166,8 +184,8 @@ jobs:
             dist/mzzb_score.exe
             build_info.txt
             mzzb.xlsx
-            X月新番首月评分.xlsx
-            X月新番完结评分.xlsx
+            monthly_anime_scores.xlsx
+            final_anime_scores.xlsx
           retention-days: 30
 
       - name: 创建发布版本
@@ -178,8 +196,8 @@ jobs:
             dist/mzzb_score.exe
             build_info.txt
             mzzb.xlsx
-            X月新番首月评分.xlsx
-            X月新番完结评分.xlsx
+            monthly_anime_scores.xlsx
+            final_anime_scores.xlsx
           name: "${{ steps.version.outputs.version }}"
           tag_name: "${{ steps.version.outputs.version }}"
           body: |
@@ -192,8 +210,8 @@ jobs:
             1. 下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境
             2. 使用提供的Excel模板文件：
                - **mzzb.xlsx** - 主要的数据文件模板
-               - **X月新番首月评分.xlsx** - 首月评分统计模板
-               - **X月新番完结评分.xlsx** - 完结评分统计模板
+               - **monthly_anime_scores.xlsx** - 首月评分统计模板
+               - **final_anime_scores.xlsx** - 完结评分统计模板
             3. 在Excel文件中填入动画名称，可选择预填平台链接
             4. 运行程序，根据提示配置Twitter功能（可选）
             5. 程序会自动获取各平台评分数据并更新Excel文件
@@ -201,8 +219,8 @@ jobs:
             ###  下载文件说明
             - 📋 **mzzb_score.exe** - 主程序文件
             - 📊 **mzzb.xlsx** - 数据输入模板
-            - 🎯 **X月新番首月评分.xlsx** - 首月评分统计模板
-            - 🏆 **X月新番完结评分.xlsx** - 完结评分统计模板
+            - 🎯 **monthly_anime_scores.xlsx** - 首月评分统计模板（X月新番首月评分）
+            - 🏆 **final_anime_scores.xlsx** - 完结评分统计模板（X月新番完结评分）
             ---
             *此版本由 GitHub Actions 自动构建和发布*
           draft: false
@@ -222,6 +240,6 @@ jobs:
           Write-Host "📁 已发布的文件:"
           Write-Host "   - mzzb_score.exe (主程序)"
           Write-Host "   - mzzb.xlsx (数据输入模板)"
-          Write-Host "   - X月新番首月评分.xlsx (首月评分模板)"
-          Write-Host "   - X月新番完结评分.xlsx (完结评分模板)"
+          Write-Host "   - monthly_anime_scores.xlsx (首月评分模板)"
+          Write-Host "   - final_anime_scores.xlsx (完结评分模板)"
           Write-Host "   - build_info.txt (构建信息)"
