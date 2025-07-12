@@ -66,15 +66,15 @@ jobs:
           python -m pip install pyinstaller
           Write-Host "📦 安装项目依赖..."
           pip install -r requirements.txt
-          Write-Host "✅ 依赖安装完成"
+                      Write-Host "依赖安装完成"
           
           # 验证关键依赖
           Write-Host "🔍 验证关键依赖..."
-          python -c "import twscrape; print('✅ twscrape OK')"
-          python -c "import asyncio; print('✅ asyncio OK')"
-          python -c "import pandas; print('✅ pandas OK')"
-          python -c "import openpyxl; print('✅ openpyxl OK')"
-          python -c "import requests; print('✅ requests OK')"
+          python -c "import twscrape; print('OK: twscrape imported')"
+          python -c "import asyncio; print('OK: asyncio imported')"
+          python -c "import pandas; print('OK: pandas imported')"
+          python -c "import openpyxl; print('OK: openpyxl imported')"
+          python -c "import requests; print('OK: requests imported')"
 
       - name: 创建构建信息文件
         run: |
@@ -88,14 +88,14 @@ jobs:
         run: |
           Write-Host "🔍 检查模块导入..."
           python -c "import sys; print('Python version:', sys.version)"
-          python -c "import asyncio; print('✅ asyncio imported')"
-          python -c "import twscrape; print('✅ twscrape imported')"
-          python -c "import src.extractors; print('✅ src.extractors imported')"
-          python -c "import src.parsers; print('✅ src.parsers imported')"
-          python -c "import src.data_process; print('✅ src.data_process imported')"
-          python -c "import utils; print('✅ utils imported')"
-          python -c "import models; print('✅ models imported')"
-          Write-Host "✅ 所有模块导入成功"
+          python -c "import asyncio; print('OK: asyncio imported')"
+          python -c "import twscrape; print('OK: twscrape imported')"
+          python -c "import src.extractors; print('OK: src.extractors imported')"
+          python -c "import src.parsers; print('OK: src.parsers imported')"
+          python -c "import src.data_process; print('OK: src.data_process imported')"
+          python -c "import utils; print('OK: utils imported')"
+          python -c "import models; print('OK: models imported')"
+          Write-Host "所有模块导入成功"
 
       - name: 使用PyInstaller构建EXE
         run: |
@@ -115,7 +115,7 @@ jobs:
       - name: 验证构建结果
         run: |
           if (Test-Path "dist/mzzb_score.exe") {
-            Write-Host "✅ EXE文件构建成功"
+            Write-Host "EXE文件构建成功"
             $fileSize = (Get-Item "dist/mzzb_score.exe").Length / 1MB
             Write-Host "📦 文件大小: $([math]::Round($fileSize, 2)) MB"
             Write-Host "🏷️ 版本号: ${{ steps.version.outputs.version }}"
@@ -126,9 +126,9 @@ jobs:
             foreach ($file in $excelFiles) {
               if (Test-Path $file) {
                 $excelSize = (Get-Item $file).Length / 1KB
-                Write-Host "   ✅ $file - $([math]::Round($excelSize, 1)) KB"
+                Write-Host "   OK: $file - $([math]::Round($excelSize, 1)) KB"
               } else {
-                Write-Host "   ❌ $file - 文件不存在"
+                Write-Host "   ERROR: $file - 文件不存在"
                 exit 1
               }
             }
@@ -147,9 +147,9 @@ jobs:
               Write-Host "📝 文件哈希: $($hash.Hash.Substring(0,16))..."
             }
             
-            Write-Host "✅ 构建验证完成"
+            Write-Host "构建验证完成"
           } else {
-            Write-Host "❌ EXE文件构建失败"
+            Write-Host "ERROR: EXE文件构建失败"
             exit 1
           }
 
