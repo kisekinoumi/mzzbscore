@@ -20,6 +20,7 @@ jobs:
       - name: 计算版本号
         id: version
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           # 计算语义化版本号 va.b.c
           # 初始值: a=2, b=0, c=0 (v2.0.0)
           # 每次提交 c+1，c>=10 时 c=0 且 b+1，b>=10 时 b=0 且 a+1
@@ -62,6 +63,7 @@ jobs:
 
       - name: 安装依赖
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
           Write-Host "📦 安装项目依赖..."
@@ -78,6 +80,7 @@ jobs:
 
       - name: 创建构建信息文件
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           echo "构建时间: $(Get-Date)" > build_info.txt
           echo "版本号: ${{ steps.version.outputs.version }}" >> build_info.txt
           echo "版本详情: ${{ steps.version.outputs.major }}.${{ steps.version.outputs.minor }}.${{ steps.version.outputs.patch }}" >> build_info.txt
@@ -86,6 +89,7 @@ jobs:
 
       - name: 预构建检查
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host "🔍 检查模块导入..."
           python -c "import sys; print('Python version:', sys.version)"
           python -c "import asyncio; print('OK: asyncio imported')"
@@ -114,6 +118,7 @@ jobs:
 
       - name: 验证构建结果
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           if (Test-Path "dist/mzzb_score.exe") {
             Write-Host "EXE文件构建成功"
             $fileSize = (Get-Item "dist/mzzb_score.exe").Length / 1MB
@@ -137,7 +142,7 @@ jobs:
             Write-Host "🔍 验证EXE文件依赖..."
             $dependencies = @("kernel32.dll", "user32.dll", "msvcrt.dll")
             foreach ($dep in $dependencies) {
-              Write-Host "   - $dep: 系统依赖"
+              Write-Host "   - ${dep}: 系统依赖"
             }
             
             # 验证文件完整性
@@ -208,6 +213,7 @@ jobs:
       - name: 构建完成通知
         if: success()
         run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
           Write-Host "🎉 构建和发布完成！"
           Write-Host "📦 版本号: ${{ steps.version.outputs.version }}"
           Write-Host "🏷️ 标签: ${{ steps.version.outputs.version }}"
