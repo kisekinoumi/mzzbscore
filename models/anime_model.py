@@ -7,7 +7,7 @@ class Anime:
                  bangumi_name='', anilist_name='', myanimelist_name='', filmarks_name='',
                  bangumi_total='', anilist_total='', myanimelist_total='', filmarks_total='',
                  bangumi_subject_Date='', myanimelist_subject_Date='', anilist_subject_Date='',
-                 filmarks_subject_Date=''):
+                 filmarks_subject_Date='', twitter_username='', twitter_url='', twitter_followers=''):
         self.original_name = original_name  # 原始名称
         self.score_bgm = score_bgm  # Bangumi 评分
         self.score_al = score_al  # AniList 评分
@@ -30,6 +30,10 @@ class Anime:
         self.myanimelist_subject_Date = myanimelist_subject_Date
         self.anilist_subject_Date = anilist_subject_Date
         self.filmarks_subject_Date = filmarks_subject_Date
+        # Twitter/X 相关信息
+        self.twitter_username = twitter_username  # Twitter用户名
+        self.twitter_url = twitter_url  # Twitter链接
+        self.twitter_followers = twitter_followers  # Twitter粉丝数
 
     def __str__(self):
         return (f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
@@ -37,4 +41,5 @@ class Anime:
                 f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
                 f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.filmarks_name}, "
                 f"StartDates: BGM:{self.bangumi_subject_Date}, MAL:{self.myanimelist_subject_Date}, "
-                f"AL:{self.anilist_subject_Date}, FM:{self.filmarks_subject_Date})")
+                f"AL:{self.anilist_subject_Date}, FM:{self.filmarks_subject_Date}, "
+                f"Twitter: @{self.twitter_username} ({self.twitter_url}) Followers: {self.twitter_followers})")

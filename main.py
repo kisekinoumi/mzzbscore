@@ -6,15 +6,15 @@ from openpyxl import load_workbook
 
 # 导入自定义模块
 from models import Anime
-from utils import preprocess_name, setup_logger, date_error, UrlChecker
-from utils.global_variables import FILE_PATH, update_constants
-from biz.extractors import (
+from utils import preprocess_name, setup_logger, date_error, UrlChecker, setup_twitter_config
+from utils.core.global_variables import FILE_PATH, update_constants
+from src.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
     extract_anilist_data,
     extract_filmarks_data
 )
-from biz.data_process.excel_handler import update_excel_data
+from src.data_process.excel_handler import update_excel_data
 from utils import ExcelColumnHelper
 import concurrent.futures
 
@@ -28,11 +28,30 @@ date_error.clear()
 if __name__ != "__main__":
     exit()
 
+wb = None  # 初始化wb变量
+
 try:
     logging.info("程序开始运行...")
     
+    # 配置Twitter粉丝数获取功能
+    twitter_config_success = False
+    try:
+        twitter_config_success = setup_twitter_config()
+        if not twitter_config_success:
+            logging.warning("Twitter配置失败，将跳过Twitter粉丝数获取功能")
+    except Exception as e:
+        logging.error(f"Twitter配置过程中出现错误: {e}")
+        logging.info("程序将继续运行其他功能")
+        twitter_config_success = False
+    
     # 读取Excel文件
-    wb = load_workbook(FILE_PATH)
+    try:
+        wb = load_workbook(FILE_PATH)
+        logging.info(f"成功加载Excel文件: {FILE_PATH}")
+    except Exception as e:
+        logging.error(f"无法加载Excel文件 {FILE_PATH}: {e}")
+        logging.error("请检查Excel文件是否存在且格式正确")
+        raise
     ws = wb.active
 
     # 更新全局常量
@@ -120,6 +139,23 @@ try:
             new_processed_name = unescape(preprocess_name(anime.myanimelist_name))
             extract_anilist_data(anime, new_processed_name)
 
+        # 获取Twitter粉丝数（如果找到了Twitter账号且配置成功）
+        if hasattr(anime, 'twitter_username') and anime.twitter_username:
+            if twitter_config_success:
+                try:
+                    from src.extractors import TwitterFollowersHelper
+                    followers_count = TwitterFollowersHelper.get_followers_count(anime.twitter_username)
+                    if followers_count is not None:
+                        anime.twitter_followers = followers_count
+                    else:
+                        logging.warning(f"无法获取 @{anime.twitter_username} 的粉丝数")
+                        anime.twitter_followers = "获取失败"
+                except Exception as e:
+                    logging.error(f"获取Twitter粉丝数时出错: {e}")
+                    anime.twitter_followers = "获取出错"
+            else:
+                logging.info(f"发现Twitter账号 @{anime.twitter_username}，但Twitter配置未成功，跳过粉丝数获取")
+                anime.twitter_followers = "配置未成功"
 
         # 更新Excel数据
         update_excel_data(ws, index, anime, col_helper)
@@ -132,11 +168,14 @@ except Exception as e:
 
 finally:
     # 保存Excel文件
-    try:
-        wb.save(FILE_PATH)
-        logging.info("Excel表格已成功更新。")
-    except Exception as e:
-        logging.error(f"保存Excel文件时发生错误: {e}")
+    if wb is not None:
+        try:
+            wb.save(FILE_PATH)
+            logging.info("Excel表格已成功更新。")
+        except Exception as e:
+            logging.error(f"保存Excel文件时发生错误: {e}")
+    else:
+        logging.warning("Excel文件未成功加载，跳过保存操作")
     
     # 输出日期错误信息
     try:

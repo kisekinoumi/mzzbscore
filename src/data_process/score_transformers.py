@@ -2,7 +2,7 @@
 # 各平台评分转换逻辑
 
 import logging
-from utils.data_validators import safe_float, is_valid_value
+from utils.validators.data_validators import safe_float, is_valid_value
 
 
 class ScoreTransformer:
@@ -32,13 +32,13 @@ class ScoreTransformer:
             return None
     
     @staticmethod
-    def filmarks_double(score):
+    def filmarks_standard(score):
         """
-        Filmarks评分乘2（转换为10分制）
+        Filmarks评分标准化（原始评分，格式化为一位小数）
         Args:
             score: Filmarks原始评分
         Returns:
-            float or None: 转换后的评分，失败时返回None
+            str or None: 标准化后的评分（保留一位小数），失败时返回None
         """
         if not is_valid_value(score):
             return None
@@ -48,7 +48,30 @@ class ScoreTransformer:
             return None
             
         try:
-            return score_float * 2
+            return f"{score_float:.1f}"
+        except Exception as e:
+            logging.error(f"Filmarks评分格式化失败: {score} -> {e}")
+            return None
+    
+    @staticmethod
+    def filmarks_double(score):
+        """
+        Filmarks评分乘2（转换为10分制）
+        Args:
+            score: Filmarks原始评分
+        Returns:
+            str or None: 转换后的评分（保留1位小数），失败时返回None
+        """
+        if not is_valid_value(score):
+            return None
+            
+        score_float = safe_float(score)
+        if score_float is None:
+            return None
+            
+        try:
+            converted = score_float * 2
+            return f"{converted:.1f}"
         except Exception as e:
             logging.error(f"Filmarks评分转换失败: {score} -> {e}")
             return None
@@ -56,30 +79,46 @@ class ScoreTransformer:
     @staticmethod
     def bangumi_standard(score):
         """
-        Bangumi评分标准化（已经是10分制，直接返回）
+        Bangumi评分标准化（已经是10分制，格式化为两位小数）
         Args:
             score: Bangumi原始评分
         Returns:
-            float or None: 标准化后的评分，失败时返回None
+            str or None: 标准化后的评分（保留两位小数），失败时返回None
         """
         if not is_valid_value(score):
             return None
             
-        return safe_float(score)
+        score_float = safe_float(score)
+        if score_float is None:
+            return None
+            
+        try:
+            return f"{score_float:.2f}"
+        except Exception as e:
+            logging.error(f"Bangumi评分格式化失败: {score} -> {e}")
+            return None
     
     @staticmethod
     def myanimelist_standard(score):
         """
-        MyAnimeList评分标准化（已经是10分制，直接返回）
+        MyAnimeList评分标准化（已经是10分制，格式化为两位小数）
         Args:
             score: MyAnimeList原始评分
         Returns:
-            float or None: 标准化后的评分，失败时返回None
+            str or None: 标准化后的评分（保留两位小数），失败时返回None
         """
         if not is_valid_value(score):
             return None
             
-        return safe_float(score)
+        score_float = safe_float(score)
+        if score_float is None:
+            return None
+            
+        try:
+            return f"{score_float:.2f}"
+        except Exception as e:
+            logging.error(f"MyAnimeList评分格式化失败: {score} -> {e}")
+            return None
     
     @staticmethod
     def get_transformed_scores(anime):
@@ -94,8 +133,8 @@ class ScoreTransformer:
             'bangumi': ScoreTransformer.bangumi_standard(anime.score_bgm),
             'anilist': ScoreTransformer.anilist_to_standard(anime.score_al),
             'myanimelist': ScoreTransformer.myanimelist_standard(anime.score_mal),
-            'filmarks': safe_float(anime.score_fm),  # 原始评分
-            'filmarks_doubled': ScoreTransformer.filmarks_double(anime.score_fm)  # 乘2后的评分
+            'filmarks': ScoreTransformer.filmarks_standard(anime.score_fm),  # 原始评分（1位小数）
+            'filmarks_doubled': ScoreTransformer.filmarks_double(anime.score_fm)  # 乘2后的评分（1位小数）
         }
 
 

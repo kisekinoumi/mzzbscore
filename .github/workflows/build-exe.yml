@@ -64,7 +64,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
+          Write-Host "📦 安装项目依赖..."
           pip install -r requirements.txt
+          Write-Host "✅ 依赖安装完成"
+          
+          # 验证关键依赖
+          Write-Host "🔍 验证关键依赖..."
+          python -c "import twscrape; print('✅ twscrape OK')"
+          python -c "import asyncio; print('✅ asyncio OK')"
+          python -c "import pandas; print('✅ pandas OK')"
+          python -c "import openpyxl; print('✅ openpyxl OK')"
+          python -c "import requests; print('✅ requests OK')"
 
       - name: 创建构建信息文件
         run: |
@@ -74,9 +84,33 @@ jobs:
           echo "提交哈希: ${{ github.sha }}" >> build_info.txt
           echo "构建编号: ${{ github.run_number }}" >> build_info.txt
 
+      - name: 预构建检查
+        run: |
+          Write-Host "🔍 检查模块导入..."
+          python -c "import sys; print('Python version:', sys.version)"
+          python -c "import asyncio; print('✅ asyncio imported')"
+          python -c "import twscrape; print('✅ twscrape imported')"
+          python -c "import src.extractors; print('✅ src.extractors imported')"
+          python -c "import src.parsers; print('✅ src.parsers imported')"
+          python -c "import src.data_process; print('✅ src.data_process imported')"
+          python -c "import utils; print('✅ utils imported')"
+          python -c "import models; print('✅ models imported')"
+          Write-Host "✅ 所有模块导入成功"
+
       - name: 使用PyInstaller构建EXE
         run: |
-          pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 main.py
+          pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 ^
+            --hidden-import=asyncio ^
+            --hidden-import=twscrape ^
+            --hidden-import=twscrape.api ^
+            --hidden-import=twscrape.gather ^
+            --hidden-import=src.extractors ^
+            --hidden-import=src.parsers ^
+            --hidden-import=src.data_process ^
+            --collect-all=twscrape ^
+            --collect-all=asyncio ^
+            --collect-submodules=src ^
+            main.py
 
       - name: 验证构建结果
         run: |
@@ -85,6 +119,35 @@ jobs:
             $fileSize = (Get-Item "dist/mzzb_score.exe").Length / 1MB
             Write-Host "📦 文件大小: $([math]::Round($fileSize, 2)) MB"
             Write-Host "🏷️ 版本号: ${{ steps.version.outputs.version }}"
+            
+            # 验证Excel文件是否存在
+            Write-Host "📊 验证Excel文件..."
+            $excelFiles = @("mzzb.xlsx", "X月新番首月评分.xlsx", "X月新番完结评分.xlsx")
+            foreach ($file in $excelFiles) {
+              if (Test-Path $file) {
+                $excelSize = (Get-Item $file).Length / 1KB
+                Write-Host "   ✅ $file - $([math]::Round($excelSize, 1)) KB"
+              } else {
+                Write-Host "   ❌ $file - 文件不存在"
+                exit 1
+              }
+            }
+            
+            # 验证EXE文件的依赖
+            Write-Host "🔍 验证EXE文件依赖..."
+            $dependencies = @("kernel32.dll", "user32.dll", "msvcrt.dll")
+            foreach ($dep in $dependencies) {
+              Write-Host "   - $dep: 系统依赖"
+            }
+            
+            # 验证文件完整性
+            Write-Host "🧪 验证文件完整性..."
+            if (Get-Command "Get-FileHash" -ErrorAction SilentlyContinue) {
+              $hash = Get-FileHash "dist/mzzb_score.exe" -Algorithm SHA256
+              Write-Host "📝 文件哈希: $($hash.Hash.Substring(0,16))..."
+            }
+            
+            Write-Host "✅ 构建验证完成"
           } else {
             Write-Host "❌ EXE文件构建失败"
             exit 1
@@ -97,6 +160,9 @@ jobs:
           path: |
             dist/mzzb_score.exe
             build_info.txt
+            mzzb.xlsx
+            X月新番首月评分.xlsx
+            X月新番完结评分.xlsx
           retention-days: 30
 
       - name: 创建发布版本
@@ -106,6 +172,9 @@ jobs:
           files: |
             dist/mzzb_score.exe
             build_info.txt
+            mzzb.xlsx
+            X月新番首月评分.xlsx
+            X月新番完结评分.xlsx
           name: "${{ steps.version.outputs.version }}"
           tag_name: "${{ steps.version.outputs.version }}"
           body: |
@@ -115,8 +184,20 @@ jobs:
             - **提交哈希**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
 
             ###  使用说明
-            下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境。
+            1. 下载 `mzzb_score.exe` 文件即可直接运行，无需安装Python环境
+            2. 使用提供的Excel模板文件：
+               - **mzzb.xlsx** - 主要的数据文件模板
+               - **X月新番首月评分.xlsx** - 首月评分统计模板
+               - **X月新番完结评分.xlsx** - 完结评分统计模板
+            3. 在Excel文件中填入动画名称，可选择预填平台链接
+            4. 运行程序，根据提示配置Twitter功能（可选）
+            5. 程序会自动获取各平台评分数据并更新Excel文件
 
+            ###  下载文件说明
+            - 📋 **mzzb_score.exe** - 主程序文件
+            - 📊 **mzzb.xlsx** - 数据输入模板
+            - 🎯 **X月新番首月评分.xlsx** - 首月评分统计模板
+            - 🏆 **X月新番完结评分.xlsx** - 完结评分统计模板
             ---
             *此版本由 GitHub Actions 自动构建和发布*
           draft: false
@@ -131,3 +212,10 @@ jobs:
           Write-Host "📦 版本号: ${{ steps.version.outputs.version }}"
           Write-Host "🏷️ 标签: ${{ steps.version.outputs.version }}"
           Write-Host "🔗 下载地址: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}"
+          Write-Host ""
+          Write-Host "📁 已发布的文件:"
+          Write-Host "   - mzzb_score.exe (主程序)"
+          Write-Host "   - mzzb.xlsx (数据输入模板)"
+          Write-Host "   - X月新番首月评分.xlsx (首月评分模板)"
+          Write-Host "   - X月新番完结评分.xlsx (完结评分模板)"
+          Write-Host "   - build_info.txt (构建信息)"

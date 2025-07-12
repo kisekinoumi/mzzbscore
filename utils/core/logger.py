@@ -19,6 +19,16 @@ def setup_logger(log_file_path='mzzb_score.log'):
                             logging.StreamHandler(sys.stdout)  # 同时输出到控制台
                         ])
     
+    # 控制第三方库的详细日志输出
+    # 禁用 httpx 的详细HTTP请求日志
+    logging.getLogger('httpx').setLevel(logging.WARNING)
+    # 禁用 httpcore 的详细日志
+    logging.getLogger('httpcore').setLevel(logging.WARNING)
+    # 控制 requests 库的详细日志
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    # 控制 asyncio 的详细日志
+    logging.getLogger('asyncio').setLevel(logging.WARNING)
+    
     return logging.getLogger()
 
 # 全局日期错误列表

@@ -17,3 +17,5 @@ dist/
 temp.py
 test.py
 outporiginal_name.html
+/temp/
+accounts.db

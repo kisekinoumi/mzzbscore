@@ -72,13 +72,14 @@ class ExcelColumnHelper:
             logging.warning(f"列 '{column_name}' 不存在，跳过写入")
             return False
     
-    def safe_write_hyperlink(self, row_num, column_name, url):
+    def safe_write_hyperlink(self, row_num, column_name, url, display_text=None):
         """
         安全写入超链接到指定列
         Args:
             row_num: 行号
             column_name: 列名
             url: 链接地址
+            display_text: 可选的显示文本，如果不提供则使用URL作为显示文本
         Returns:
             bool: 是否写入成功
         """
@@ -86,7 +87,10 @@ class ExcelColumnHelper:
         if col_idx is not None and url:
             try:
                 # openpyxl中列索引从1开始，但我们的索引从0开始，所以要+1
-                self.ws.cell(row=row_num, column=col_idx + 1).hyperlink = url
+                cell = self.ws.cell(row=row_num, column=col_idx + 1)
+                cell.hyperlink = url
+                # 设置显示文本，如果没有提供则使用URL
+                cell.value = display_text if display_text else url
                 return True
             except Exception as e:
                 logging.error(f"写入超链接到列 '{column_name}' 时出错: {e}")

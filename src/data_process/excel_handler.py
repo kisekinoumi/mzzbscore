@@ -2,9 +2,9 @@
 # 存放Excel处理相关的逻辑
 
 import logging
-from utils import ExcelColumnHelper, is_valid_value, is_valid_name, ColumnMappings, ExcelColumns
-from biz.data_process.score_transformers import ScoreTransformer, TotalCountTransformer
-from biz.data_process.date_validator import DateValidator
+from utils import ExcelColumnHelper, is_valid_value, is_valid_name, ColumnMappings, ExcelColumns, TwitterParser
+from src.data_process.score_transformers import ScoreTransformer, TotalCountTransformer
+from src.data_process.date_validator import DateValidator
 
 def update_excel_data(ws, index, anime, col_helper=None):
     """
@@ -63,6 +63,9 @@ def update_excel_data(ws, index, anime, col_helper=None):
     # ---------------------平台链接、名称写入---------------------
     _write_platform_links_and_names(col_helper, row_num, anime, ColumnMappings.PLATFORM_URL_MAPPINGS)
 
+    # ---------------------Twitter/X 社交媒体写入---------------------
+    _write_social_media_data(col_helper, row_num, anime)
+
     # ---------------------放送日期处理---------------------
     _process_release_date_validation(col_helper, row_num, anime)
 
@@ -85,7 +88,7 @@ def _write_platform_data(col_helper, current_row, anime, platform_name, data_map
 
 def _write_platform_links_and_names(col_helper, row_num, anime, platform_mapping):
     """
-    写入平台链接和名称的通用函数
+    写入平台链接和名称的通用函数（超链接形式：显示条目名称，点击跳转到对应链接）
     Args:
         col_helper: Excel列助手
         row_num: 行号
@@ -93,19 +96,75 @@ def _write_platform_links_and_names(col_helper, row_num, anime, platform_mapping
         platform_mapping: 平台映射字典，格式为 {"platform": {"name_col": "列名", "url_col": "列名", "name_attr": "属性名", "url_attr": "属性名"}}
     """
     for platform, mapping in platform_mapping.items():
-        # 写入名称
+        # 获取条目名称和链接
         name_value = getattr(anime, mapping['name_attr'], None)
-        if is_valid_name(name_value):
-            success = col_helper.safe_write(col_helper.ws[row_num], mapping['name_col'], name_value)
-            if not success:
-                logging.error(f"Error writing {platform} name for {anime.original_name[:50]}")
-        
-        # 写入URL
         url_value = getattr(anime, mapping['url_attr'], None)
-        if url_value:
-            success = col_helper.safe_write_hyperlink(row_num, mapping['url_col'], url_value)
+        
+        # 如果同时有名称和链接，写入超链接形式
+        if is_valid_name(name_value) and url_value:
+            success = col_helper.safe_write_hyperlink(row_num, mapping['url_col'], url_value, name_value)
+            if success:
+                logging.info(f"已写入{platform}超链接: {name_value} -> {url_value}")
+            else:
+                logging.error(f"Error writing {platform} hyperlink for {anime.original_name[:50]}")
+        elif url_value:
+            # 如果只有链接没有名称，直接写入链接
+            success = col_helper.safe_write(col_helper.ws[row_num], mapping['url_col'], url_value)
             if not success:
                 logging.error(f"Error writing {platform} URL for {anime.original_name[:50]}")
+        elif is_valid_name(name_value):
+            # 如果只有名称没有链接，写入名称
+            success = col_helper.safe_write(col_helper.ws[row_num], mapping['url_col'], name_value)
+            if not success:
+                logging.error(f"Error writing {platform} name for {anime.original_name[:50]}")
+
+
+def _write_social_media_data(col_helper, row_num, anime):
+    """
+    写入社交媒体数据（Twitter/X账号和粉丝数）
+    Args:
+        col_helper: Excel列助手
+        row_num: 行号
+        anime: 动画对象
+    """
+    # 处理Twitter/X账号信息
+    if anime.twitter_username and anime.twitter_url:
+        # 验证Twitter数据有效性
+        if TwitterParser.validate_twitter_data(anime.twitter_username, anime.twitter_url):
+            # 格式化显示文本（用户名作为超链接文本）
+            display_text = TwitterParser.format_twitter_info_for_display(anime.twitter_username, anime.twitter_url)
+            
+            # 写入Twitter超链接
+            success = col_helper.safe_write_hyperlink(row_num, ExcelColumns.X_TWITTER, anime.twitter_url, display_text)
+            if success:
+                logging.info(f"已写入Twitter超链接: {display_text} -> {anime.twitter_url}")
+            else:
+                logging.error(f"写入Twitter超链接失败: {anime.original_name[:50]}")
+        else:
+            logging.warning(f"Twitter数据验证失败，跳过写入: @{anime.twitter_username} ({anime.twitter_url})")
+    else:
+        logging.debug("没有找到有效的Twitter信息")
+    
+    # 处理Twitter粉丝数信息 - 只有在Twitter功能启用时才写入
+    if hasattr(anime, 'twitter_followers') and anime.twitter_followers:
+        try:
+            # 检查Twitter功能是否启用
+            from utils.core.twitter_config import get_twitter_config
+            twitter_config = get_twitter_config()
+            
+            if twitter_config.is_enabled():
+                # 写入粉丝数到X_FAN列
+                success = col_helper.safe_write(col_helper.ws[row_num], ExcelColumns.X_FAN, anime.twitter_followers)
+                if success:
+                    logging.info(f"已写入Twitter粉丝数: {anime.twitter_followers}")
+                else:
+                    logging.error(f"写入Twitter粉丝数失败: {anime.original_name[:50]}")
+            else:
+                logging.debug("Twitter功能已禁用，跳过写入粉丝数")
+        except Exception as e:
+            logging.error(f"写入Twitter粉丝数时出错: {e}")
+    else:
+        logging.debug("没有找到Twitter粉丝数信息")
 
 
 def _process_release_date_validation(col_helper, row_num, anime):

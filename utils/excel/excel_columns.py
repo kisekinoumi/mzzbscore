@@ -44,6 +44,10 @@ class ExcelColumns:
     MYANIMELIST_URL = "Myanilist_url"
     FILMARKS_URL = "Filmarks_url"
     
+    # 社交媒体列
+    X_TWITTER = "X"  # Twitter/X账号列
+    X_FAN = "X_fan"  # 粉丝相关列
+    
     # 错误信息列
     DATE_ERROR = "Notes"
 
@@ -99,6 +103,15 @@ class ColumnMappings:
             "url_attr": "filmarks_url"
         }
     }
+    
+    # Twitter/X社交媒体映射
+    SOCIAL_MEDIA_MAPPINGS = {
+        "Twitter": {
+            "column": ExcelColumns.X_TWITTER,
+            "username_attr": "twitter_username",
+            "url_attr": "twitter_url"
+        }
+    }
 
 
 # 提供一个快速访问的字典格式（可选）
@@ -120,5 +133,7 @@ COLUMN_NAMES = {
     'anilist_url': ExcelColumns.ANILIST_URL,
     'myanimelist_url': ExcelColumns.MYANIMELIST_URL,
     'filmarks_url': ExcelColumns.FILMARKS_URL,
+    'x_twitter': ExcelColumns.X_TWITTER,
+    'x_fan': ExcelColumns.X_FAN,
     'date_error': ExcelColumns.DATE_ERROR
 } 

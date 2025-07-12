@@ -146,7 +146,7 @@ class UrlChecker:
         Returns:
             dict: 包含各平台URL的字典
         """
-        from utils.excel_columns import ExcelColumns
+        from utils.excel.excel_columns import ExcelColumns
         
         url_columns = {
             'bangumi': ExcelColumns.BANGUMI_URL,
