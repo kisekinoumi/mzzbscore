@@ -12,12 +12,21 @@ class TwitterInteractiveConfig:
     """Twitter交互式配置管理器"""
     
     def __init__(self):
+        """初始化Twitter配置"""
         self.config = {
             'cookies': '',
             'is_enabled': False,
             'is_validated': False
         }
         self.validation_attempted = False
+        
+        # 设置twscrape的日志级别，避免详细日志干扰输出
+        try:
+            from loguru import logger
+            logger.remove()  # 移除默认的日志配置
+            logger.add(lambda msg: None, level="ERROR")  # 只记录错误级别的日志
+        except (ImportError, Exception):
+            pass  # 如果loguru不可用或设置失败，忽略
     
     def collect_user_input(self) -> bool:
         """
@@ -285,7 +294,11 @@ class TwitterInteractiveConfig:
             return False
     
     def _test_twitter_authentication(self) -> bool:
-        """测试Twitter认证配置并预初始化API"""
+        """
+        进行Twitter API认证测试
+        Returns:
+            bool: 认证测试是否成功
+        """
         try:
             print("[SEARCH] 正在测试Twitter配置...")
             
@@ -295,6 +308,15 @@ class TwitterInteractiveConfig:
                 import asyncio
                 import time
                 print("[SUCCESS] twscrape库导入成功")
+                
+                # 设置twscrape的日志级别，避免详细日志干扰输出
+                try:
+                    from loguru import logger
+                    logger.remove()  # 移除默认的日志配置
+                    logger.add(lambda msg: None, level="ERROR")  # 只记录错误级别的日志
+                except ImportError:
+                    pass  # 如果loguru不可用，忽略
+                
             except ImportError:
                 print("[ERROR] twscrape库导入失败")
                 return False
@@ -342,6 +364,10 @@ class TwitterInteractiveConfig:
                             email_password="dummy_password",
                             cookies=cookies_str
                         )
+                        # 立即刷新输出缓冲区
+                        import sys
+                        sys.stdout.flush()
+                        sys.stderr.flush()
                         print(f"[SUCCESS] 成功添加Cookies账号: {cookies_username}")
                         
                         # 进行简单的API调用测试
@@ -363,6 +389,10 @@ class TwitterInteractiveConfig:
                             helper_api.is_initialized = True
                             helper_api.api = api
                             print("[SUCCESS] Twitter粉丝数API已预初始化")
+                            
+                            # 确保所有输出都被刷新
+                            sys.stdout.flush()
+                            sys.stderr.flush()
                             
                             return True
                         else:
@@ -408,6 +438,15 @@ class TwitterInteractiveConfig:
                     if exception[0]:
                         raise exception[0]
                     
+                    # 等待一下确保所有异步输出完成
+                    import time
+                    time.sleep(0.5)
+                    
+                    # 最终刷新输出缓冲区
+                    import sys
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    
                     return result[0]
                 else:
                     return loop.run_until_complete(test_and_initialize_api())
@@ -417,7 +456,14 @@ class TwitterInteractiveConfig:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    return loop.run_until_complete(test_and_initialize_api())
+                    result = loop.run_until_complete(test_and_initialize_api())
+                    # 确保输出完成
+                    import time
+                    time.sleep(0.5)
+                    import sys
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                    return result
                 finally:
                     loop.close()
                     

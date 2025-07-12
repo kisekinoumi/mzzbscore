@@ -59,6 +59,20 @@ try:
         logging.info("程序将继续运行其他功能")
         twitter_config_success = False
     
+    # 确保Twitter配置的所有输出都完成
+    import sys
+    sys.stdout.flush()
+    sys.stderr.flush()
+    
+    # 添加一个短暂的延迟，确保所有异步输出完成
+    import time
+    time.sleep(1)
+    
+    # 输出分隔线，明确标识Twitter配置完成
+    print("\n" + "="*60)
+    print("📋 开始处理动画数据...")
+    print("="*60)
+    
     # 读取Excel文件
     try:
         wb = load_workbook(FILE_PATH)

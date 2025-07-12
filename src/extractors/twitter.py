@@ -26,6 +26,14 @@ class TwitterFollowersAPI:
         self.last_error = None
         self.twitter_config = get_twitter_config()
         
+        # 设置twscrape的日志级别，避免详细日志干扰输出
+        try:
+            from loguru import logger
+            logger.remove()  # 移除默认的日志配置
+            logger.add(lambda msg: None, level="ERROR")  # 只记录错误级别的日志
+        except (ImportError, Exception):
+            pass  # 如果loguru不可用或设置失败，忽略
+        
         # 缓存
         self._cache = {}
         self._cache_expire = {}
@@ -100,6 +108,10 @@ class TwitterFollowersAPI:
                         email_password="dummy_password",  # 使用cookies时邮箱密码不重要
                         cookies=cookies_str  # 关键：直接在这里提供cookies
                     )
+                    # 立即刷新输出缓冲区
+                    import sys
+                    sys.stdout.flush()
+                    sys.stderr.flush()
                     logging.info(f"成功添加Cookies账号: {cookies_username}")
                 except Exception as e:
                     logging.error(f"添加Cookies账号失败: {e}")
@@ -107,6 +119,12 @@ class TwitterFollowersAPI:
             
             self.is_initialized = True
             logging.info("Twitter API初始化成功")
+            
+            # 确保所有输出都被刷新
+            import sys
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
             return True
             
         except Exception as e:
