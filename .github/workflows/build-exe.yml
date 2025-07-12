@@ -66,7 +66,7 @@ jobs:
           python -m pip install pyinstaller
           Write-Host "📦 安装项目依赖..."
           pip install -r requirements.txt
-                      Write-Host "依赖安装完成"
+          Write-Host "依赖安装完成"
           
           # 验证关键依赖
           Write-Host "🔍 验证关键依赖..."
@@ -99,17 +99,17 @@ jobs:
 
       - name: 使用PyInstaller构建EXE
         run: |
-          pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 ^
-            --hidden-import=asyncio ^
-            --hidden-import=twscrape ^
-            --hidden-import=twscrape.api ^
-            --hidden-import=twscrape.gather ^
-            --hidden-import=src.extractors ^
-            --hidden-import=src.parsers ^
-            --hidden-import=src.data_process ^
-            --collect-all=twscrape ^
-            --collect-all=asyncio ^
-            --collect-submodules=src ^
+          pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 `
+            --hidden-import=asyncio `
+            --hidden-import=twscrape `
+            --hidden-import=twscrape.api `
+            --hidden-import=twscrape.gather `
+            --hidden-import=src.extractors `
+            --hidden-import=src.parsers `
+            --hidden-import=src.data_process `
+            --collect-all=twscrape `
+            --collect-all=asyncio `
+            --collect-submodules=src `
             main.py
 
       - name: 验证构建结果
