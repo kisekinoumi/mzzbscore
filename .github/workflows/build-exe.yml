@@ -33,57 +33,57 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     
+    - name: Create fake_useragent prepare script
+      run: |
+        echo "Creating fake_useragent prepare script..."
+        echo "import sys" > prepare_fake_useragent.py
+        echo "import os" >> prepare_fake_useragent.py
+        echo "import shutil" >> prepare_fake_useragent.py
+        echo "from pathlib import Path" >> prepare_fake_useragent.py
+        echo "" >> prepare_fake_useragent.py
+        echo "# 设置UTF-8编码输出" >> prepare_fake_useragent.py
+        echo "if sys.platform == 'win32':" >> prepare_fake_useragent.py
+        echo "    import io" >> prepare_fake_useragent.py
+        echo "    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')" >> prepare_fake_useragent.py
+        echo "    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')" >> prepare_fake_useragent.py
+        echo "" >> prepare_fake_useragent.py
+        echo "try:" >> prepare_fake_useragent.py
+        echo "    from fake_useragent import UserAgent" >> prepare_fake_useragent.py
+        echo "    ua = UserAgent()" >> prepare_fake_useragent.py
+        echo "    ua.random" >> prepare_fake_useragent.py
+        echo "    print('[SUCCESS] fake_useragent数据下载完成')" >> prepare_fake_useragent.py
+        echo "    import fake_useragent" >> prepare_fake_useragent.py
+        echo "    fa_path = Path(fake_useragent.__file__).parent" >> prepare_fake_useragent.py
+        echo "    data_dir = fa_path / 'data'" >> prepare_fake_useragent.py
+        echo "    if data_dir.exists():" >> prepare_fake_useragent.py
+        echo "        project_data_dir = Path('fake_useragent_data')" >> prepare_fake_useragent.py
+        echo "        if project_data_dir.exists():" >> prepare_fake_useragent.py
+        echo "            shutil.rmtree(project_data_dir)" >> prepare_fake_useragent.py
+        echo "        shutil.copytree(data_dir, project_data_dir)" >> prepare_fake_useragent.py
+        echo "        print(f'[SUCCESS] 数据文件已复制到: {project_data_dir}')" >> prepare_fake_useragent.py
+        echo "        for file in project_data_dir.rglob('*'):" >> prepare_fake_useragent.py
+        echo "            if file.is_file():" >> prepare_fake_useragent.py
+        echo "                print(f'[FILE] {file}')" >> prepare_fake_useragent.py
+        echo "    else:" >> prepare_fake_useragent.py
+        echo "        print('[WARNING] 未找到data目录')" >> prepare_fake_useragent.py
+        echo "except Exception as e:" >> prepare_fake_useragent.py
+        echo "    print(f'[ERROR] 准备fake_useragent数据失败: {e}')" >> prepare_fake_useragent.py
+        echo "    os.makedirs('fake_useragent_data', exist_ok=True)" >> prepare_fake_useragent.py
+        echo "    print('[INFO] 创建了最小数据目录')" >> prepare_fake_useragent.py
+    
     - name: Pre-download fake_useragent data
       run: |
         echo "正在预下载fake_useragent数据..."
-        python -c "
-        try:
-            from fake_useragent import UserAgent
-            import os
-            import shutil
-            from pathlib import Path
-            
-            # 初始化UserAgent，触发数据下载
-            ua = UserAgent()
-            ua.random  # 触发数据下载
-            print('✅ fake_useragent数据下载完成')
-            
-            # 找到数据文件位置并复制
-            import fake_useragent
-            fa_path = Path(fake_useragent.__file__).parent
-            data_dir = fa_path / 'data'
-            
-            if data_dir.exists():
-                # 复制到项目目录
-                project_data_dir = Path('fake_useragent_data')
-                if project_data_dir.exists():
-                    shutil.rmtree(project_data_dir)
-                shutil.copytree(data_dir, project_data_dir)
-                print(f'✅ 数据文件已复制到: {project_data_dir}')
-                
-                # 列出复制的文件
-                for file in project_data_dir.rglob('*'):
-                    if file.is_file():
-                        print(f'📁 {file}')
-            else:
-                print('⚠️  未找到data目录')
-                
-        except Exception as e:
-            print(f'❌ 准备fake_useragent数据失败: {e}')
-            # 创建一个最小的数据目录
-            import os
-            os.makedirs('fake_useragent_data', exist_ok=True)
-            print('📁 创建了最小数据目录')
-        "
+        python prepare_fake_useragent.py
     
     - name: Verify fake_useragent data
       run: |
         echo "验证fake_useragent数据..."
         if (Test-Path fake_useragent_data) {
-            echo "✅ fake_useragent_data目录存在"
-            Get-ChildItem -Recurse fake_useragent_data | ForEach-Object { echo "📁 $($_.FullName)" }
+            echo "[SUCCESS] fake_useragent_data目录存在"
+            Get-ChildItem -Recurse fake_useragent_data | ForEach-Object { echo "[FILE] $($_.FullName)" }
         } else {
-            echo "❌ fake_useragent_data目录不存在"
+            echo "[ERROR] fake_useragent_data目录不存在"
         }
     
     - name: Build EXE with PyInstaller
@@ -118,28 +118,36 @@ jobs:
         echo "验证编译输出..."
         if (Test-Path dist\mzzbscore.exe) {
             $size = (Get-Item dist\mzzbscore.exe).Length / 1MB
-            echo "✅ 编译成功！文件大小: $([math]::Round($size, 1)) MB"
-            echo "📍 文件位置: $(Get-Item dist\mzzbscore.exe | Select-Object -ExpandProperty FullName)"
+            $sizeRounded = [math]::Round($size, 1)
+            echo "[SUCCESS] 编译成功！文件大小: $sizeRounded MB"
+            $fullPath = (Get-Item dist\mzzbscore.exe | Select-Object -ExpandProperty FullName)
+            echo "[INFO] 文件位置: $fullPath"
         } else {
-            echo "❌ 编译失败，未找到exe文件"
+            echo "[ERROR] 编译失败，未找到exe文件"
             exit 1
         }
     
     - name: Test EXE basic functionality
       run: |
         echo "测试exe基本功能..."
-        # 创建一个简单的测试，检查exe是否能启动并识别缺少Excel文件
-        # 注意：这里可能会因为缺少Excel文件而失败，但这是预期的
         try {
             $process = Start-Process -FilePath "dist\mzzbscore.exe" -Wait -PassThru -NoNewWindow -RedirectStandardOutput "test_output.txt" -RedirectStandardError "test_error.txt"
-            echo "🧪 exe进程退出代码: $($process.ExitCode)"
-            echo "📄 输出内容:"
+            echo "[TEST] exe进程退出代码: $($process.ExitCode)"
+            echo "[OUTPUT] 输出内容:"
             if (Test-Path "test_output.txt") { Get-Content "test_output.txt" }
-            echo "📄 错误内容:"
+            echo "[ERROR] 错误内容:"
             if (Test-Path "test_error.txt") { Get-Content "test_error.txt" }
         } catch {
-            echo "⚠️  测试过程中出现异常: $($_.Exception.Message)"
-            echo "💡 这可能是正常的，因为缺少Excel文件"
+            echo "[WARNING] 测试过程中出现异常: $($_.Exception.Message)"
+            echo "[INFO] 这可能是正常的，因为缺少Excel文件"
+        }
+    
+    - name: Clean up temporary files
+      run: |
+        echo "清理临时文件..."
+        if (Test-Path "prepare_fake_useragent.py") {
+            Remove-Item "prepare_fake_useragent.py"
+            echo "[INFO] 已删除临时脚本文件"
         }
     
     - name: Upload EXE artifact
