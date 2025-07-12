@@ -60,22 +60,11 @@ try:
         twitter_config_success = False
     
     # 确保Twitter配置的所有输出都完成
-    import sys
-    sys.stdout.flush()
-    sys.stderr.flush()
-    
-    # 添加一个短暂的延迟，确保所有异步输出完成
     import time
     time.sleep(1)
     
     # 输出分隔线，明确标识Twitter配置完成
-    logging.info("\n" + "="*60)
     logging.info("📋 开始处理动画数据...")
-    logging.info("="*60)
-    
-    # 再次强制刷新，确保分隔线立即显示
-    sys.stdout.flush()
-    sys.stderr.flush()
     
     # 读取Excel文件
     try:
