@@ -15,6 +15,7 @@ except ImportError:
     logging.warning("twscrape库未安装，Twitter粉丝数获取功能将被禁用")
 
 from utils.core.twitter_config import get_twitter_config
+from utils.network.proxy_config import get_global_proxy
 
 
 class TwitterFollowersAPI:
@@ -69,7 +70,15 @@ class TwitterFollowersAPI:
             return False
             
         try:
-            self.api = API()
+            # 获取代理配置
+            proxy_config = get_global_proxy()
+            proxy_url = None
+            if proxy_config:
+                proxy_url = proxy_config.get('http')
+                logging.info(f"Twitter API将使用代理: {proxy_url}")
+            
+            # 初始化API（带代理支持）
+            self.api = API(proxy=proxy_url)
             
             # 获取Cookies配置
             account_info = self.twitter_config.get_account_info()

@@ -6,6 +6,7 @@ import getpass
 import asyncio
 import time
 from typing import Dict, Optional, Tuple
+from utils.network.proxy_config import get_global_proxy
 
 
 class TwitterInteractiveConfig:
@@ -183,7 +184,14 @@ class TwitterInteractiveConfig:
             
             async def test_api_connection():
                 try:
-                    api = API()
+                    # 获取代理配置
+                    proxy_config = get_global_proxy()
+                    proxy_url = None
+                    if proxy_config:
+                        proxy_url = proxy_config.get('http')
+                        self.logger.info(f"[PROXY] Twitter测试将使用代理: {proxy_url}")
+                    
+                    api = API(proxy=proxy_url)
                     
                     # 创建测试账号
                     test_username = f"test_user_{int(time.time())}"
@@ -327,7 +335,14 @@ class TwitterInteractiveConfig:
             
             # 创建异步测试函数
             async def test_and_initialize_api():
-                api = API()
+                # 获取代理配置
+                proxy_config = get_global_proxy()
+                proxy_url = None
+                if proxy_config:
+                    proxy_url = proxy_config.get('http')
+                    self.logger.info(f"[PROXY] Twitter认证测试将使用代理: {proxy_url}")
+                
+                api = API(proxy=proxy_url)
                 
                 # 获取Cookies
                 cookies_str = self.config['cookies']

@@ -78,14 +78,20 @@ def verify_proxy_twitter(proxy_dict: Dict[str, str]) -> bool:
     Returns:
         bool: 代理是否可用
     """
-    # 推特相关的测试URL（按优先级排序）
-    twitter_test_urls = [
-        "https://x.com",
-        "https://twitter.com", 
-        "https://api.twitter.com",
+    # 主要的Twitter测试URL
+    main_twitter_urls = [
+        "https://twitter.com",
+        "https://x.com"
     ]
     
-    for test_url in twitter_test_urls:
+    # 备用测试URL
+    backup_url = "https://api.twitter.com"
+    
+    success_count = 0
+    total_main_urls = len(main_twitter_urls)
+    
+    # 测试主要的Twitter域名
+    for test_url in main_twitter_urls:
         try:
             logging.info(f"尝试通过代理访问: {test_url}")
             
@@ -101,24 +107,54 @@ def verify_proxy_twitter(proxy_dict: Dict[str, str]) -> bool:
             
             if response.status_code == 200:
                 logging.info(f"✅ 代理验证成功，可以正常访问 {test_url}")
-                return True
+                success_count += 1
             elif response.status_code in [301, 302, 303, 307, 308]:
                 # 重定向也算成功
                 logging.info(f"✅ 代理验证成功，{test_url} 返回重定向")
-                return True
+                success_count += 1
+            else:
+                logging.warning(f"❌ {test_url} 返回状态码: {response.status_code}")
                 
         except requests.exceptions.ProxyError:
             logging.warning(f"❌ 代理连接失败: {test_url}")
-            continue
         except requests.exceptions.Timeout:
             logging.warning(f"❌ 代理访问超时: {test_url}")
-            continue
         except requests.exceptions.ConnectionError:
             logging.warning(f"❌ 代理连接错误: {test_url}")
-            continue
         except Exception as e:
             logging.warning(f"❌ 访问 {test_url} 异常: {e}")
-            continue
+    
+    # 如果主要URL都成功，直接返回成功
+    if success_count == total_main_urls:
+        logging.info(f"✅ 所有主要Twitter域名都可以正常访问 ({success_count}/{total_main_urls})")
+        return True
+    
+    # 如果有部分成功，也认为代理可用
+    if success_count > 0:
+        logging.info(f"✅ 部分Twitter域名可以正常访问 ({success_count}/{total_main_urls})")
+        return True
+    
+    # 如果主要URL都失败，尝试备用URL
+    logging.info(f"主要Twitter域名都无法访问，尝试备用URL: {backup_url}")
+    try:
+        response = requests.get(
+            backup_url, 
+            proxies=proxy_dict, 
+            timeout=5,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            allow_redirects=True
+        )
+        
+        if response.status_code == 200 or response.status_code in [301, 302, 303, 307, 308]:
+            logging.info(f"✅ 备用URL验证成功: {backup_url}")
+            return True
+        else:
+            logging.warning(f"❌ 备用URL返回状态码: {response.status_code}")
+            
+    except Exception as e:
+        logging.warning(f"❌ 备用URL访问异常: {e}")
     
     logging.warning("❌ 所有推特URL都无法通过代理访问")
     return False
