@@ -23,7 +23,7 @@ from openpyxl import load_workbook
 from models import Anime
 from utils import preprocess_name, setup_logger, date_error, UrlChecker, setup_twitter_config
 from utils.core.global_variables import FILE_PATH, update_constants
-from utils.network import setup_proxy, get_proxy_status
+from utils.network import setup_proxy, get_proxy_status, is_twitter_accessible
 from src.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
@@ -65,14 +65,20 @@ try:
     
     # 配置Twitter粉丝数获取功能
     twitter_config_success = False
-    try:
-        twitter_config_success = setup_twitter_config()
-        if not twitter_config_success:
-            logging.warning("Twitter配置失败，将跳过Twitter粉丝数获取功能")
-    except Exception as e:
-        logging.error(f"Twitter配置过程中出现错误: {e}")
-        logging.info("程序将继续运行其他功能")
+    
+    # 检查Twitter是否可用
+    if not is_twitter_accessible():
+        logging.warning("Twitter网络不可用，跳过Twitter粉丝数获取功能配置")
         twitter_config_success = False
+    else:
+        try:
+            twitter_config_success = setup_twitter_config()
+            if not twitter_config_success:
+                logging.warning("Twitter配置失败，将跳过Twitter粉丝数获取功能")
+        except Exception as e:
+            logging.error(f"Twitter配置过程中出现错误: {e}")
+            logging.info("程序将继续运行其他功能")
+            twitter_config_success = False
     
     # 确保Twitter配置的所有输出都完成
     import time
@@ -179,9 +185,12 @@ try:
             extract_anilist_data(anime, new_processed_name)
 
 
-        # 获取Twitter粉丝数（如果找到了Twitter账号且配置成功）
+        # 获取Twitter粉丝数（如果找到了Twitter账号且配置成功且网络可用）
         if hasattr(anime, 'twitter_username') and anime.twitter_username:
-            if twitter_config_success:
+            if not is_twitter_accessible():
+                logging.info(f"发现Twitter账号 @{anime.twitter_username}，但Twitter网络不可用，跳过粉丝数获取")
+                anime.twitter_followers = "网络不可用"
+            elif twitter_config_success:
                 try:
                     from src.extractors import TwitterFollowersHelper
                     followers_count = TwitterFollowersHelper.get_followers_count(anime.twitter_username)
