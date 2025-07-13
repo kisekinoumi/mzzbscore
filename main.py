@@ -13,6 +13,9 @@ if sys.platform == 'win32':
 # 设置环境变量
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+# 表格模板格式，如果修改值要求使用者更新表格文件
+FORMAT_VERSION = 20250714
+
 import time
 from html import unescape
 
@@ -96,6 +99,12 @@ try:
         logging.error("请检查Excel文件是否存在且格式正确")
         raise
     ws = wb.active
+
+    # 检查表格格式版本
+    excel_version = ws['M1'].value
+    if excel_version != FORMAT_VERSION:
+        logging.error(f"表格模板版本不匹配！当前代码要求表格文件模板版本为 {FORMAT_VERSION}，但表格模板版本为 {excel_version}。请更新表格模板后重试。")
+        raise SystemExit(1)
 
     # 更新全局常量
     update_constants(str(ws['A1'].value)[:4])  # 读取表格设置目标放送年份
