@@ -26,7 +26,7 @@ from openpyxl import load_workbook
 from models import Anime
 from utils import preprocess_name, setup_logger, date_error, UrlChecker, setup_twitter_config
 from utils.core.global_variables import FILE_PATH, update_constants
-from utils.network import setup_proxy, get_proxy_status, is_twitter_accessible
+from utils.network import setup_proxy, get_proxy_status, is_twitter_accessible, check_update
 from src.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
@@ -50,6 +50,9 @@ try:
 except Exception as e:
     logging.error(f"代理配置过程中出现错误: {e}")
     logging.info("程序将使用直连模式继续运行")
+
+# 检查更新（仅在exe环境下）
+check_update()
 
 # 输出分隔线，明确标识代理配置完成
 logging.info("=" * 50)
