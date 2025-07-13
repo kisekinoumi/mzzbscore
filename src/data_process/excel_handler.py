@@ -35,6 +35,35 @@ def update_excel_data(ws, index, anime, col_helper=None):
     transformed_scores = ScoreTransformer.get_transformed_scores(anime)
     transformed_totals = TotalCountTransformer.get_transformed_totals(anime)
 
+    # ---------------------检查评分人数并设置NaN---------------------
+    # 检查各平台的评分人数，如果小于50则将对应的评分和人数都设置为"NaN"
+    MIN_TOTAL_COUNT = 50
+    
+    # 检查Bangumi
+    if transformed_totals['bangumi'] is not None and transformed_totals['bangumi'] < MIN_TOTAL_COUNT:
+        logging.info(f"Bangumi评分人数({transformed_totals['bangumi']})小于{MIN_TOTAL_COUNT}，设置为NaN")
+        transformed_scores['bangumi'] = "NaN"
+        transformed_totals['bangumi'] = "NaN"
+    
+    # 检查AniList
+    if transformed_totals['anilist'] is not None and transformed_totals['anilist'] < MIN_TOTAL_COUNT:
+        logging.info(f"AniList评分人数({transformed_totals['anilist']})小于{MIN_TOTAL_COUNT}，设置为NaN")
+        transformed_scores['anilist'] = "NaN"
+        transformed_totals['anilist'] = "NaN"
+    
+    # 检查MyAnimeList
+    if transformed_totals['myanimelist'] is not None and transformed_totals['myanimelist'] < MIN_TOTAL_COUNT:
+        logging.info(f"MyAnimeList评分人数({transformed_totals['myanimelist']})小于{MIN_TOTAL_COUNT}，设置为NaN")
+        transformed_scores['myanimelist'] = "NaN"
+        transformed_totals['myanimelist'] = "NaN"
+    
+    # 检查Filmarks
+    if transformed_totals['filmarks'] is not None and transformed_totals['filmarks'] < MIN_TOTAL_COUNT:
+        logging.info(f"Filmarks评分人数({transformed_totals['filmarks']})小于{MIN_TOTAL_COUNT}，设置为NaN")
+        transformed_scores['filmarks'] = "NaN"
+        transformed_scores['filmarks_doubled'] = "NaN"
+        transformed_totals['filmarks'] = "NaN"
+
     # ---------------------各平台数据写入---------------------
     # 平台名称映射
     platform_key_mapping = {
