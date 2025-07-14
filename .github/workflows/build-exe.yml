@@ -339,12 +339,6 @@ jobs:
             - 📊 **mzzb.xlsx** - 数据输入模板
             - 🎯 **monthly_anime_scores.xlsx** - 首月评分统计模板（X月新番首月评分）
             - 🏆 **final_anime_scores.xlsx** - 完结评分统计模板（X月新番完结评分）
-
-            ### 🔧 本版本修复
-            - ✅ 修复了exe文件中的中文字符编码问题
-            - ✅ 修复了fake_useragent在exe环境中的数据缺失问题
-            - ✅ 优化了Twitter功能的用户界面和错误处理
-            - ✅ 增强了日志输出的稳定性
             
             ---
             *此版本由 GitHub Actions 自动构建和发布*
