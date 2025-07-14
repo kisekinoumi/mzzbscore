@@ -13,6 +13,9 @@ if sys.platform == 'win32':
 # 设置环境变量
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
+# 表格模板格式，如果修改值要求使用者更新表格文件
+FORMAT_VERSION = 20250714
+
 import time
 from html import unescape
 
@@ -23,7 +26,7 @@ from openpyxl import load_workbook
 from models import Anime
 from utils import preprocess_name, setup_logger, date_error, UrlChecker, setup_twitter_config
 from utils.core.global_variables import FILE_PATH, update_constants
-from utils.network import setup_proxy, get_proxy_status, is_twitter_accessible
+from utils.network import setup_proxy, get_proxy_status, is_twitter_accessible, check_update
 from src.extractors import (
     extract_bangumi_data,
     extract_myanimelist_data,
@@ -47,6 +50,9 @@ try:
 except Exception as e:
     logging.error(f"代理配置过程中出现错误: {e}")
     logging.info("程序将使用直连模式继续运行")
+
+# 检查更新（仅在exe环境下）
+check_update()
 
 # 输出分隔线，明确标识代理配置完成
 logging.info("=" * 50)
@@ -96,6 +102,12 @@ try:
         logging.error("请检查Excel文件是否存在且格式正确")
         raise
     ws = wb.active
+
+    # 检查表格格式版本
+    excel_version = ws['M1'].value
+    if excel_version != FORMAT_VERSION:
+        logging.error(f"表格模板版本不匹配！当前代码要求表格文件模板版本为 {FORMAT_VERSION}，但表格模板版本为 {excel_version}。请更新表格模板后重试。")
+        raise SystemExit(1)
 
     # 更新全局常量
     update_constants(str(ws['A1'].value)[:4])  # 读取表格设置目标放送年份
