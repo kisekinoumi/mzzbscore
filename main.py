@@ -107,6 +107,7 @@ try:
     excel_version = ws['M1'].value
     if excel_version != FORMAT_VERSION:
         logging.error(f"表格模板版本不匹配！当前代码要求表格文件模板版本为 {FORMAT_VERSION}，但表格模板版本为 {excel_version}。请更新表格模板后重试。")
+        logging.error("请访问: https://github.com/kisekinoumi/mzzbscore/releases 下载最新版本的表格模板。")
         raise SystemExit(1)
 
     # 更新全局常量
