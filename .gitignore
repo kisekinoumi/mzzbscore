@@ -22,3 +22,5 @@ outporiginal_name.html
 accounts.db
 scweet_state.db*
 ~$mzzb.xlsx
+debug_twitter.py
+test_users.py
