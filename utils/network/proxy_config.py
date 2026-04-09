@@ -1,7 +1,10 @@
 # utils/network/proxy_config.py
 # 代理配置模块，包含自动检测Windows系统代理、推特验证和降级处理
 
-import winreg
+try:
+    import winreg
+except ImportError:
+    winreg = None
 import requests
 import logging
 import time
@@ -22,6 +25,9 @@ def get_system_proxy() -> Optional[Dict[str, str]]:
         Dict[str, str] or None: 代理配置字典，失败时返回None
     """
     try:
+        if winreg is None:
+            logging.info("当前非Windows系统，跳过系统代理自动检测")
+            return None
         # 打开注册表项
         reg_key = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
