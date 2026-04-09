@@ -250,6 +250,18 @@ finally:
     except Exception as e:
         logging.error(f"输出日期错误信息时发生错误: {e}")
     
+    try:
+        import os
+        import glob
+        db_files = glob.glob('scweet_state.db*')
+        for db_file in db_files:
+            try:
+                os.remove(db_file)
+            except Exception as e:
+                logging.warning(f"清理临时文件 {db_file} 时发生错误: {e}，失败")
+    except Exception as e:
+        logging.warning(f"查找或清理 Scweet 临时文件时发生错误: {e}，失败")
+        
     # 等待用户输入退出
     try:
         while True:
