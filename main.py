@@ -14,7 +14,7 @@ if sys.platform == 'win32':
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # 表格模板格式，如果修改值要求使用者更新表格文件
-FORMAT_VERSION = 20250714
+FORMAT_VERSION = 20260410
 
 import time
 from html import unescape
@@ -85,10 +85,6 @@ try:
             logging.error(f"Twitter配置过程中出现错误: {e}")
             logging.info("程序将继续运行其他功能")
             twitter_config_success = False
-    
-    # 确保Twitter配置的所有输出都完成
-    import time
-    time.sleep(1)
     
     # 输出分隔线，明确标识Twitter配置完成
     logging.info("📋 开始处理动画数据...")

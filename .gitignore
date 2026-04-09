@@ -12,6 +12,7 @@ dist/
 .idea/
 *.log
 *.pyc
+.vscode
 
 # 临时文件
 temp.py
@@ -19,4 +20,5 @@ test.py
 outporiginal_name.html
 /temp/
 accounts.db
+scweet_state.db*
 ~$mzzb.xlsx

@@ -76,7 +76,8 @@ jobs:
           
           # 验证关键依赖
           Write-Host "🔍 验证关键依赖..."
-          python -c "import twscrape; print('OK: twscrape imported')"
+          python -c "import Scweet; print('OK: Scweet imported')"
+          python -c "import curl_cffi; print('OK: curl_cffi imported')"
           python -c "import asyncio; print('OK: asyncio imported')"
           python -c "import pandas; print('OK: pandas imported')"
           python -c "import openpyxl; print('OK: openpyxl imported')"
@@ -158,7 +159,7 @@ jobs:
           Write-Host "🔍 检查模块导入..."
           python -c "import sys; print('Python version:', sys.version)"
           python -c "import asyncio; print('OK: asyncio imported')"
-          python -c "import twscrape; print('OK: twscrape imported')"
+          python -c "import Scweet; print('OK: Scweet imported')"
           python -c "import src.extractors; print('OK: src.extractors imported')"
           python -c "import src.parsers; print('OK: src.parsers imported')"
           python -c "import src.data_process; print('OK: src.data_process imported')"
@@ -175,9 +176,8 @@ jobs:
           pyinstaller --onefile --name mzzb_score --console --clean --distpath dist --workpath build --optimize 2 `
             --add-data "fake_useragent_data/*;fake_useragent/data/" `
             --hidden-import=asyncio `
-            --hidden-import=twscrape `
-            --hidden-import=twscrape.api `
-            --hidden-import=twscrape.gather `
+            --hidden-import=Scweet `
+            --hidden-import=curl_cffi `
             --hidden-import=fake_useragent.data `
             --hidden-import=fake_useragent.utils `
             --hidden-import=fake_useragent.errors `
@@ -194,7 +194,8 @@ jobs:
             --hidden-import=json `
             --hidden-import=urllib.parse `
             --hidden-import=html `
-            --collect-all=twscrape `
+            --collect-all=Scweet `
+            --collect-all=curl_cffi `
             --collect-all=asyncio `
             --collect-submodules=src `
             --collect-submodules=utils `
