@@ -210,6 +210,72 @@ class FilmarksParser(HtmlParser):
         return None
 
 
+class FilmarksApiParser:
+    """Filmarks API响应解析器"""
+
+    @staticmethod
+    def parse_search(data: Dict[str, Any]) -> list:
+        """解析搜索API响应，返回候选season列表"""
+        if not isinstance(data, dict):
+            return []
+        seasons = data.get('seasons')
+        return seasons if isinstance(seasons, list) else []
+
+    @classmethod
+    def parse_detail(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """解析详情API响应"""
+        if not isinstance(data, dict):
+            return {}
+        season = data.get('season')
+        if not isinstance(season, dict):
+            season = data
+        return cls.parse_season(season)
+
+    @staticmethod
+    def parse_season(season: Dict[str, Any]) -> Dict[str, Any]:
+        """解析单个season对象"""
+        if not isinstance(season, dict):
+            return {}
+
+        season_id = season.get('id')
+        series_id = season.get('seriesId')
+        release_date = season.get('releaseDate') or season.get('releaseQuarter')
+
+        return {
+            'id': str(season_id) if season_id is not None else None,
+            'series_id': str(series_id) if series_id is not None else None,
+            'score': season.get('averageScore'),
+            'name': season.get('title'),
+            'total': season.get('markCount'),
+            'date': FilmarksApiParser._extract_date_from_api_value(release_date),
+            'year': FilmarksApiParser._extract_year(season, release_date),
+            'data': season,
+        }
+
+    @staticmethod
+    def _extract_date_from_api_value(date_value: Any) -> Optional[str]:
+        """从API日期值中提取YYYYMM"""
+        if not date_value:
+            return None
+
+        match = re.match(r'^(\d{4})-(\d{2})', str(date_value))
+        if match:
+            return match.group(1) + match.group(2)
+        return None
+
+    @staticmethod
+    def _extract_year(season: Dict[str, Any], release_date: Any) -> Optional[str]:
+        """提取候选条目的放送年份"""
+        production_year = season.get('productionYear')
+        if production_year:
+            return str(production_year)
+
+        date = FilmarksApiParser._extract_date_from_api_value(release_date)
+        if date:
+            return date[:4]
+        return None
+
+
 class FilmarksDataSetter:
     """Filmarks数据设置器，负责将解析结果设置到Anime对象"""
     
@@ -222,10 +288,13 @@ class FilmarksDataSetter:
             url: Filmarks URL
             parsed_data: 解析结果
         """
+        score = parsed_data.get('score')
+        total = parsed_data.get('total')
+
         anime.filmarks_url = url
-        anime.score_fm = parsed_data.get('score') or 'No score found'
+        anime.score_fm = str(score) if score is not None else 'No score found'
         anime.filmarks_name = parsed_data.get('name') or 'No name found'
-        anime.filmarks_total = parsed_data.get('total') or 'No count found'
+        anime.filmarks_total = str(total) if total is not None else 'No count found'
         
         if parsed_data.get('date'):
             anime.filmarks_subject_Date = parsed_data['date']

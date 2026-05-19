@@ -90,13 +90,14 @@ MZZB Score 是一个动画评分聚合工具，能够自动从多个知名动画
   - 链接模式：直接从Excel中的URL链接提取数据，速度快且准确
   - 搜索模式：当没有链接时，通过名称搜索获取数据
 - **MyAnimeList搜索兜底**：优先使用官方API搜索；当官方API搜索无法召回正确条目时，仅使用MAL网页搜索定位anime ID，再通过官方API详情接口读取评分、人数和日期
+- **Filmarks API提取**：优先使用Filmarks移动端API搜索和详情接口读取评分、评分人数和日期；API失败时回退到原网页解析逻辑
 - **并发数据获取**：使用ThreadPoolExecutor同时从四个网站获取数据，提高处理效率
 - **统一的提取器架构**：所有平台提取器都基于BaseExtractor，确保一致的行为和错误处理
 - 自动从以下网站获取动画评分数据：
   - **Bangumi (番组计划)**：使用官方API，支持subject ID直接提取。
-  - **MyAnimeList (MAL)**：使用官方API，支持完整URL/anime ID直接提取。
+  - **MyAnimeList (MAL)**：使用官方API，支持完整URL/anime ID直接提取，网页解析作为兜底。
   - **AniList (AL)**：使用官方GraphQL API，支持anime ID直接提取。
-  - **Filmarks (FM)**：网页解析，支持完整URL直接提取。
+  - **Filmarks (FM)**：优先使用移动端API，支持完整URL/season ID直接提取，网页解析作为兜底。
 - **评分标准化**：自动转换不同平台的评分制度（如AniList的百分制转为十分制）。
 - **日期一致性检查**：验证各平台开播日期的一致性，并报告差异。
 - **智能匹配**：基于发布年份筛选，确保获取正确的动画条目。

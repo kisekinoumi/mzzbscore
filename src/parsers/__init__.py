@@ -6,7 +6,7 @@ from .base_parser import BaseParser
 from .twitter_parser import TwitterParser
 from .link_parser import LinkParser
 from .myanimelist_parser import MyAnimeListParser, MyAnimeListDataSetter
-from .filmarks_parser import FilmarksParser
+from .filmarks_parser import FilmarksParser, FilmarksApiParser
 
 __all__ = [
     'BaseParser',
@@ -14,5 +14,6 @@ __all__ = [
     'LinkParser',
     'MyAnimeListParser',
     'MyAnimeListDataSetter',
-    'FilmarksParser'
+    'FilmarksParser',
+    'FilmarksApiParser'
 ] 

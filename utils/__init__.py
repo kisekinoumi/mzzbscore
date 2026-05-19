@@ -9,6 +9,7 @@ __all__ = [
     'ANILIST_HEADERS',        # 从headers模块
     'MYANIMELIST_HEADERS',    # 从headers模块
     'FILMARKS_HEADERS',       # 从headers模块
+    'FILMARKS_API_HEADERS',   # 从headers模块
     'preprocess_name',         # 从text_processor模块
     'FILE_PATH',               # 从global_variables模块
     'update_constants',        # 从global_variables模块
@@ -45,7 +46,10 @@ __all__ = [
 
 # 从network模块导入
 from utils.network.network import fetch_data_with_retry
-from utils.network.headers import RequestHeaders, BANGUMI_HEADERS, ANILIST_HEADERS, MYANIMELIST_HEADERS, FILMARKS_HEADERS
+from utils.network.headers import (
+    RequestHeaders, BANGUMI_HEADERS, ANILIST_HEADERS, MYANIMELIST_HEADERS,
+    FILMARKS_HEADERS, FILMARKS_API_HEADERS
+)
 
 # 从text_processor模块导入
 from utils.parsers.text_processor import preprocess_name

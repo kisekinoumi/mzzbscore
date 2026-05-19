@@ -136,17 +136,18 @@ class LinkParser:
         if not url:
             return None
             
-        # 匹配模式: https://filmarks.com/animes/数字/数字
+        # 匹配模式: https://filmarks.com/animes/{series_id}/{season_id}
         pattern = r'https?://filmarks\.com/animes/(\d+)/(\d+)'
         match = re.search(pattern, url)
         
         if match:
-            anime_id = match.group(1)
-            series_id = match.group(2)
-            logging.info(f"从Filmarks URL提取到anime_id: {anime_id}, series_id: {series_id}")
+            series_id = match.group(1)
+            season_id = match.group(2)
+            logging.info(f"从Filmarks URL提取到series_id: {series_id}, season_id: {season_id}")
             return {
-                'anime_id': anime_id,
                 'series_id': series_id,
+                'season_id': season_id,
+                'anime_id': season_id,
                 'full_url': url
             }
         else:

@@ -75,6 +75,16 @@ class RequestHeaders:
     def get_filmarks_headers(cls) -> Dict[str, str]:
         """获取Filmarks页面爬取headers"""
         return cls.HTML_HEADERS.copy()
+
+    @classmethod
+    def get_filmarks_api_headers(cls) -> Dict[str, str]:
+        """获取Filmarks移动端API请求headers"""
+        return {
+            'User-Agent': 'Filmarks/10.24.0 (Android 14)',
+            'X-App-Version': '10.24.0',
+            'X-Platform': 'android',
+            'Accept': 'application/json',
+        }
     
     @classmethod
     def get_custom_headers(cls, 
@@ -107,6 +117,7 @@ BANGUMI_HEADERS = RequestHeaders.get_bangumi_headers()
 ANILIST_HEADERS = RequestHeaders.get_anilist_headers()
 MYANIMELIST_HEADERS = RequestHeaders.get_myanimelist_headers()
 FILMARKS_HEADERS = RequestHeaders.get_filmarks_headers()
+FILMARKS_API_HEADERS = RequestHeaders.get_filmarks_api_headers()
 
 # 导出常用的headers
 __all__ = [
@@ -114,5 +125,6 @@ __all__ = [
     'BANGUMI_HEADERS',
     'ANILIST_HEADERS', 
     'MYANIMELIST_HEADERS',
-    'FILMARKS_HEADERS'
+    'FILMARKS_HEADERS',
+    'FILMARKS_API_HEADERS'
 ]
