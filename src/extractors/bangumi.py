@@ -110,9 +110,6 @@ class BangumiExtractor(BaseExtractor):
         
         try:
             search_result = response.json()
-            # 保存返回数据到文件方便调试（可选）
-            with open("outporiginal_name.html", "w", encoding="utf-8") as f:
-                f.write(response.text)
             return search_result.get('data', [])
         except requests.exceptions.JSONDecodeError:
             logging.error("Bangumi搜索结果JSON解析失败")
