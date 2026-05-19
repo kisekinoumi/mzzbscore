@@ -52,14 +52,18 @@ class MyAnimeListDateProcessor:
     @classmethod
     def parse(cls, aired_str: str) -> Optional[str]:
         """
-        解析MyAnimeList的Aired日期格式
+        解析MyAnimeList的日期格式
         Args:
-            aired_str: 如 "Jan 10, 2025 to ?" 或 "Jan 10, 2025"
+            aired_str: 如 "Jan 10, 2025 to ?"、"Jan 10, 2025" 或 API 的 "2025-01-10"
         Returns:
             str or None: YYYYMM格式，解析失败返回None
         """
         if not aired_str:
             return None
+
+        api_match = re.match(r"^(\d{4})-(\d{2})", aired_str)
+        if api_match:
+            return api_match.group(1) + api_match.group(2)
             
         # 用正则提取月份英文缩写和年份
         match = re.search(r'([A-Za-z]{3})\s+\d{1,2},\s+(\d{4})', aired_str)
@@ -140,4 +144,4 @@ class AniListDateProcessor:
         if month:
             return f"{year}{month:02d}"
         else:
-            return str(year) 
+            return str(year)

@@ -24,7 +24,14 @@ from openpyxl import load_workbook
 
 # 导入自定义模块
 from models import Anime
-from utils import preprocess_name, setup_logger, date_error, UrlChecker, setup_twitter_config
+from utils import (
+    preprocess_name,
+    setup_logger,
+    date_error,
+    UrlChecker,
+    setup_twitter_config,
+    setup_myanimelist_api_config,
+)
 from utils.core.global_variables import FILE_PATH, update_constants
 from utils.network import setup_proxy, get_proxy_status, is_twitter_accessible, check_update
 from src.extractors import (
@@ -39,6 +46,61 @@ import concurrent.futures
 
 # 配置日志
 logging = setup_logger()
+
+MAL_NOT_FOUND_ERRORS = {"No acceptable subject found", "No results found"}
+ANILIST_NOT_FOUND_ERRORS = {"No acceptable subject found", "No AniList results"}
+INVALID_FALLBACK_TITLES = {"", "No name found", "未知名称", None}
+
+
+def _is_mal_not_found(anime):
+    """MAL是否处于可用交叉兜底重试的未找到状态"""
+    return anime.score_mal in MAL_NOT_FOUND_ERRORS
+
+
+def _is_anilist_not_found(anime):
+    """AniList是否处于可用交叉兜底重试的未找到状态"""
+    return anime.score_al in ANILIST_NOT_FOUND_ERRORS
+
+
+def _is_valid_fallback_title(title):
+    """检查交叉兜底标题是否值得尝试"""
+    return title not in INVALID_FALLBACK_TITLES and bool(str(title).strip())
+
+
+def _retry_myanimelist_with_anilist_titles(anime):
+    """MAL失败时，先用AniList日文标题兜底，再用AniList英文标题兜底"""
+    fallback_titles = [
+        ("日文标题", getattr(anime, "anilist_japanese_name", "") or anime.anilist_name),
+        ("英文标题", getattr(anime, "anilist_english_name", "")),
+    ]
+
+    for title_type, title in fallback_titles:
+        if not _is_mal_not_found(anime):
+            break
+        if not _is_valid_fallback_title(title):
+            continue
+
+        logging.info(f"MAL候选未找到，尝试使用 AniList 返回的{title_type}重新搜索 MAL: {title}")
+        new_processed_name = preprocess_name(title)
+        extract_myanimelist_data(anime, new_processed_name)
+
+
+def _retry_anilist_with_myanimelist_titles(anime):
+    """AniList失败时，先用MAL日文标题兜底，再用MAL英文标题兜底"""
+    fallback_titles = [
+        ("日文标题", getattr(anime, "myanimelist_japanese_name", "") or anime.myanimelist_name),
+        ("英文标题", getattr(anime, "myanimelist_english_name", "")),
+    ]
+
+    for title_type, title in fallback_titles:
+        if not _is_anilist_not_found(anime):
+            break
+        if not _is_valid_fallback_title(title):
+            continue
+
+        logging.info(f"AniList候选未找到，尝试使用 MAL 返回的{title_type}重新搜索 AniList: {title}")
+        new_processed_name = unescape(preprocess_name(title))
+        extract_anilist_data(anime, new_processed_name)
 
 # 第一步：代理检测和配置（程序运行的第一步）
 try:
@@ -68,6 +130,11 @@ wb = None  # 初始化wb变量
 
 try:
     logging.info("程序开始运行...")
+
+    # 配置MyAnimeList官方API鉴权（公开评分读取使用Client ID即可）
+    mal_config_success = setup_myanimelist_api_config()
+    if not mal_config_success:
+        logging.warning("MyAnimeList API未完成配置，MAL评分获取功能将不可用")
     
     # 配置Twitter粉丝数获取功能
     twitter_config_success = False
@@ -180,18 +247,11 @@ try:
                 except Exception as exc:
                     logging.error(f"{extractor_name} extractor generated an exception: {exc}")
 
-        # 如果 MAL 没有找到候选条目，但 AniList 搜到名称，则用 AniList 返回的名称重新搜索 MAL
-        mal_not_found = anime.score_mal in ["No acceptable subject found", "No results found"]
-        if mal_not_found and anime.anilist_name:
-            logging.info("MAL候选未找到，尝试使用 AniList 返回的名称重新搜索 MAL")
-            new_processed_name = preprocess_name(anime.anilist_name)
-            extract_myanimelist_data(anime, new_processed_name)
-        # 如果 AniList 没有找到候选条目，但 MAL 搜到名称，则用 MAL 返回的名称重新搜索 AniList
-        anilist_not_found = anime.score_al in ["No acceptable subject found", "No AniList results"]
-        if anilist_not_found and anime.myanimelist_name:
-            logging.info("AniList候选未找到，尝试使用 MAL 返回的名称重新搜索 AniList")
-            new_processed_name = unescape(preprocess_name(anime.myanimelist_name))
-            extract_anilist_data(anime, new_processed_name)
+        # MAL/AniList交叉兜底：先用日文标题重试，仍未找到再用英文标题重试
+        if _is_mal_not_found(anime):
+            _retry_myanimelist_with_anilist_titles(anime)
+        if _is_anilist_not_found(anime):
+            _retry_anilist_with_myanimelist_titles(anime)
 
 
         # 获取Twitter粉丝数（如果找到了Twitter账号且配置成功且网络可用）

@@ -2,10 +2,20 @@
 # 存放Excel处理相关的逻辑
 
 import logging
-from utils import ExcelColumnHelper, is_valid_value, is_valid_name, ColumnMappings, ExcelColumns, TwitterParser
+import math
+from utils import ExcelColumnHelper, is_valid_value, is_valid_name, safe_float, ColumnMappings, ExcelColumns, TwitterParser
 from src.data_process.score_transformers import ScoreTransformer, TotalCountTransformer
 from src.data_process.date_validator import DateValidator
 from src.extractors.twitter import TwitterFollowersHelper
+
+SCORE_NUMBER_FORMATS = {
+    ExcelColumns.BANGUMI_SCORE: "0.00",
+    ExcelColumns.ANILIST_SCORE: "0.0",
+    ExcelColumns.MYANIMELIST_SCORE: "0.00",
+    ExcelColumns.FILMARKS_ORIGINAL_SCORE: "0.0",
+    ExcelColumns.FILMARKS_SCORE: "0.0",
+}
+
 
 def update_excel_data(ws, index, anime, col_helper=None):
     """
@@ -111,9 +121,34 @@ def _write_platform_data(col_helper, current_row, anime, platform_name, data_map
         data_mapping: 数据映射字典，格式为 {"field_name": ("column_name", value)}
     """
     for field_name, (column_name, value) in data_mapping.items():
-        success = col_helper.safe_write(current_row, column_name, value)
+        success = _write_platform_value(col_helper, current_row, column_name, value)
         if not success:
             logging.error(f"Error writing {platform_name} {field_name} for {anime.original_name[:50]}")
+
+
+def _write_platform_value(col_helper, current_row, column_name, value):
+    """写入平台字段；指定评分列写入为数值并设置Excel显示格式。"""
+    number_format = SCORE_NUMBER_FORMATS.get(column_name)
+    if not number_format:
+        return col_helper.safe_write(current_row, column_name, value)
+
+    numeric_value = safe_float(value)
+    if numeric_value is None or not math.isfinite(numeric_value):
+        return col_helper.safe_write(current_row, column_name, value)
+
+    col_idx = col_helper.get_col_index(column_name)
+    if col_idx is None:
+        logging.warning(f"列 '{column_name}' 不存在，跳过写入")
+        return False
+
+    try:
+        cell = current_row[col_idx]
+        cell.value = numeric_value
+        cell.number_format = number_format
+        return True
+    except Exception as e:
+        logging.error(f"写入列 '{column_name}' 时出错: {e}")
+        return False
 
 
 def _write_platform_links_and_names(col_helper, row_num, anime, platform_mapping):

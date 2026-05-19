@@ -56,8 +56,20 @@ class RequestHeaders:
     
     @classmethod
     def get_myanimelist_headers(cls) -> Dict[str, str]:
-        """获取MyAnimeList页面爬取headers"""
-        return cls.HTML_HEADERS.copy()
+        """获取MyAnimeList API请求headers"""
+        return cls.JSON_API_HEADERS.copy()
+
+    @classmethod
+    def get_myanimelist_api_headers(cls, client_id: Optional[str] = None,
+                                    access_token: Optional[str] = None) -> Dict[str, str]:
+        """获取带鉴权信息的MyAnimeList API请求headers"""
+        headers = cls.get_myanimelist_headers()
+        if client_id:
+            headers['X-MAL-CLIENT-ID'] = client_id
+        if access_token:
+            token = access_token if access_token.lower().startswith('bearer ') else f'Bearer {access_token}'
+            headers['Authorization'] = token
+        return headers
     
     @classmethod
     def get_filmarks_headers(cls) -> Dict[str, str]:
@@ -103,4 +115,4 @@ __all__ = [
     'ANILIST_HEADERS', 
     'MYANIMELIST_HEADERS',
     'FILMARKS_HEADERS'
-] 
+]

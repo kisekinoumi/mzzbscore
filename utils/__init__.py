@@ -37,6 +37,8 @@ __all__ = [
     'TwitterParser',           # 从twitter_parser模块
 
     'setup_twitter_config',    # 从twitter_config模块
+    'setup_myanimelist_api_config',  # 从myanimelist_config模块
+    'get_myanimelist_api_config',    # 从myanimelist_config模块
     'DateProcessor',           # 从date_processors模块
     'MyAnimeListDateProcessor' # 从date_processors模块
 ]
@@ -77,6 +79,9 @@ from src.parsers.twitter_parser import TwitterParser
 
 # 从twitter_config模块导入
 from utils.core.twitter_config import setup_twitter_config
+
+# 从myanimelist_config模块导入
+from utils.core.myanimelist_config import setup_myanimelist_api_config, get_myanimelist_api_config
 
 # 从date_processors模块导入
 from utils.date.date_processors import DateProcessor, MyAnimeListDateProcessor

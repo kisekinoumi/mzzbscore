@@ -102,6 +102,27 @@ class LinkParser:
         else:
             logging.warning(f"MyAnimeList URL格式不正确: {url}")
             return None
+
+    @staticmethod
+    def extract_myanimelist_id(url: str) -> Optional[str]:
+        """
+        从MyAnimeList URL中提取anime ID
+        Args:
+            url: MyAnimeList URL (如: https://myanimelist.net/anime/58492/Mono)
+        Returns:
+            str or None: anime ID，如果提取失败返回None
+        """
+        if not url:
+            return None
+
+        match = re.search(r'https?://myanimelist\.net/anime/(\d+)', url)
+        if match:
+            anime_id = match.group(1)
+            logging.info(f"从MyAnimeList URL提取到anime_id: {anime_id}")
+            return anime_id
+
+        logging.warning(f"无法从MyAnimeList URL提取anime_id: {url}")
+        return None
     
     @staticmethod
     def extract_filmarks_info(url: str) -> Optional[Dict[str, str]]:
@@ -191,4 +212,4 @@ class UrlChecker:
         Returns:
             list: 有可用URL的平台名称列表
         """
-        return [platform for platform, url in url_dict.items() if url] 
+        return [platform for platform, url in url_dict.items() if url]

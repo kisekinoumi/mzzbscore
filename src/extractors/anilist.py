@@ -67,6 +67,8 @@ class AniListExtractor(BaseExtractor):
         anime_id = selected_candidate['id']
         anime.anilist_url = f"https://anilist.co/anime/{anime_id}"
         anime.anilist_name = selected_candidate['name']
+        anime.anilist_japanese_name = selected_candidate.get('japanese_name') or selected_candidate['name']
+        anime.anilist_english_name = selected_candidate.get('english_name') or ''
         anime.anilist_subject_Date = selected_candidate['date']
         
         # 获取详细信息
@@ -89,6 +91,7 @@ class AniListExtractor(BaseExtractor):
             id
             title {
               native
+              english
             }
             startDate {
               year
@@ -163,6 +166,7 @@ class AniListExtractor(BaseExtractor):
               id
               title {
                 native
+                english
               }
               startDate {
                 year
@@ -193,7 +197,8 @@ class AniListExtractor(BaseExtractor):
     def _extract_candidate_info(self, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """提取候选条目信息"""
         try:
-            name = candidate['title']['native']
+            title_info = candidate.get('title', {})
+            name = title_info.get('native') or title_info.get('english')
             start_date = candidate.get('startDate', {})
             year = str(start_date.get('year')) if start_date.get('year') else None
             candidate_id = candidate['id']
@@ -209,6 +214,8 @@ class AniListExtractor(BaseExtractor):
             
             return {
                 'name': name,
+                'japanese_name': name,
+                'english_name': title_info.get('english') or '',
                 'year': year,
                 'id': candidate_id,
                 'date': date_str,
@@ -219,8 +226,11 @@ class AniListExtractor(BaseExtractor):
     
     def _set_basic_info(self, anime, anime_id: int, basic_info: Dict[str, Any]):
         """设置基本信息"""
+        title_info = basic_info.get('title', {})
         anime.anilist_url = f"https://anilist.co/anime/{anime_id}"
-        anime.anilist_name = basic_info['title']['native']
+        anime.anilist_name = title_info.get('native') or 'No name found'
+        anime.anilist_japanese_name = title_info.get('native') or ''
+        anime.anilist_english_name = title_info.get('english') or ''
         
         # 处理开播日期
         start_date = basic_info.get('startDate', {})
@@ -278,4 +288,4 @@ def extract_anilist_data(anime, processed_name):
         bool: 是否成功提取数据
     """
     extractor = AniListExtractor()
-    return extractor.extract_data(anime, processed_name) 
+    return extractor.extract_data(anime, processed_name)

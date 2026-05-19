@@ -21,6 +21,10 @@ class Anime:
         self.anilist_name = anilist_name  # AniList 名称
         self.myanimelist_name = myanimelist_name  # MyAnimeList 名称
         self.filmarks_name = filmarks_name  # Filmarks 名称
+        self.anilist_japanese_name = anilist_name  # AniList 日文名称
+        self.anilist_english_name = ""  # AniList 英文名称
+        self.myanimelist_japanese_name = myanimelist_name  # MyAnimeList 日文名称
+        self.myanimelist_english_name = ""  # MyAnimeList 英文名称
         self.bangumi_total = bangumi_total  # Bangumi 评分人数
         self.anilist_total = anilist_total  # AniList 人气/评分人数
         self.myanimelist_total = myanimelist_total  # MyAnimeList 评分人数
