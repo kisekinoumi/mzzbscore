@@ -30,34 +30,51 @@ class MyAnimeListExtractor(BaseExtractor):
         self.score_key = "mal"
 
     def extract_identifier_from_url(self, url: str) -> Optional[str]:
-        """从MyAnimeList URL中提取anime ID"""
-        return LinkParser.extract_myanimelist_id(url)
+        """从MyAnimeList URL中提取可用于网页优先提取的URL"""
+        return LinkParser.extract_myanimelist_url(url)
 
     def extract_by_identifier(self, anime, identifier: str) -> bool:
-        """通过anime_id直接从MyAnimeList API提取数据"""
-        if not get_myanimelist_api_config().is_configured:
-            return ExtractorErrorHandler.handle_request_error(anime, self.score_key, "Missing MAL API config")
+        """通过URL或anime_id提取数据，详情API优先，网页HTML兜底"""
+        web_url = self._build_web_url(identifier)
+        anime_id = self._extract_anime_id(identifier)
+        if anime_id and self._extract_by_api_id(anime, anime_id, web_url):
+            return True
 
-        try:
-            anime_id = int(identifier)
-        except (TypeError, ValueError):
-            return ExtractorErrorHandler.handle_parse_error(anime, self.score_key, "Invalid anime ID")
+        logging.warning("MyAnimeList API详情提取失败，回退到网页详情HTML解析")
+        if web_url and self._extract_by_web_url(anime, web_url):
+            return True
 
+        return ExtractorErrorHandler.handle_request_error(anime, self.score_key, "Request failed")
+
+    def extract_by_search(self, anime, processed_name: str) -> bool:
+        """通过搜索提取数据，网页搜索优先，API搜索兜底"""
+        selected_candidate = self._extract_by_web_search(anime, processed_name)
+        if selected_candidate:
+            return True
+
+        logging.warning("MyAnimeList网页搜索/解析失败，回退到官方API搜索")
+        return self._extract_by_api_search(anime, processed_name)
+
+    def _extract_by_api_id(self, anime, anime_id: int, mal_url: Optional[str] = None) -> bool:
+        """通过anime_id从MyAnimeList API提取数据"""
         api_data = self._fetch_anime_details(anime_id)
         if not api_data:
-            return ExtractorErrorHandler.handle_request_error(anime, self.score_key, "Request failed")
+            return False
+
+        if mal_url:
+            api_data["_mal_url"] = mal_url
 
         return self._set_api_data(anime, api_data)
 
-    def extract_by_search(self, anime, processed_name: str) -> bool:
+    def _extract_by_api_search(self, anime, processed_name: str) -> bool:
         """通过官方API搜索提取数据"""
         if not get_myanimelist_api_config().is_configured:
             return ExtractorErrorHandler.handle_request_error(anime, self.score_key, "Missing MAL API config")
 
-        candidates = self._search_candidates(processed_name) or []
+        candidates = self._search_api_candidates(processed_name) or []
         selected_candidate = self._validate_candidates(
             candidates,
-            self._extract_candidate_info,
+            self._extract_api_candidate_info,
             max_attempts=20,
             log_failure=False,
             expected_name=processed_name,
@@ -72,7 +89,7 @@ class MyAnimeListExtractor(BaseExtractor):
             web_candidates = self._search_web_candidate_urls(processed_name) or []
             selected_candidate = self._validate_candidates(
                 web_candidates,
-                self._extract_web_candidate_info,
+                self._extract_web_id_candidate_info,
                 max_attempts=5,
                 log_failure=True,
                 expected_name=processed_name,
@@ -82,7 +99,130 @@ class MyAnimeListExtractor(BaseExtractor):
         if not selected_candidate:
             return ExtractorErrorHandler.handle_no_acceptable_candidate_error(anime, self.score_key)
 
-        return self._set_api_data(anime, selected_candidate['data'])
+        return self._set_candidate_data(anime, selected_candidate)
+
+    def _extract_by_web_search(self, anime, processed_name: str) -> bool:
+        """通过MAL网页搜索定位候选，详情数据API优先、HTML兜底"""
+        candidate_elements = self._fetch_web_search_candidate_rows(processed_name)
+        if not candidate_elements:
+            return False
+
+        selected_candidate = self._validate_candidates(
+            candidate_elements,
+            self._extract_web_candidate_info,
+            max_attempts=5,
+            log_failure=False,
+        )
+
+        if not selected_candidate:
+            logging.warning("MyAnimeList网页搜索未找到符合年份的候选条目")
+            return False
+
+        return self._set_candidate_data(anime, selected_candidate)
+
+    def _set_candidate_data(self, anime, selected_candidate: Dict[str, Any]) -> bool:
+        """按候选数据来源写入Anime对象"""
+        candidate_data = selected_candidate.get('data') or {}
+        if not candidate_data:
+            return False
+
+        if candidate_data.get('_source') == 'html':
+            return self._set_html_data(
+                anime,
+                selected_candidate['id'],
+                candidate_data.get('html'),
+                candidate_data.get('parsed_date')
+            )
+
+        return self._set_api_data(anime, candidate_data)
+
+    def _extract_by_web_url(self, anime, url: str) -> bool:
+        """通过MAL详情页HTML提取数据"""
+        response = fetch_data_with_retry(url)
+        if not response or response.status_code != 200:
+            logging.error(f"MyAnimeList页面请求失败: {url}")
+            return False
+
+        return self._set_html_data(anime, url, response.text)
+
+    def _set_html_data(self, anime, url: str, html_content: Optional[str],
+                       parsed_date: Optional[str] = None) -> bool:
+        """解析HTML并写入Anime对象"""
+        if not html_content:
+            return False
+
+        try:
+            extracted_data = MyAnimeListParser.extract_all_data(html_content)
+            has_detail_signal = any(
+                extracted_data.get(key) for key in ("aired_date", "score", "rating_count")
+            )
+            if not has_detail_signal:
+                logging.warning("MyAnimeList HTML未提取到有效数据")
+                return False
+
+            if not parsed_date and extracted_data.get('aired_date'):
+                parsed_date = MyAnimeListDateProcessor.parse(extracted_data['aired_date'])
+                if not parsed_date:
+                    logging.warning(f"MyAnimeList日期格式不匹配: {extracted_data['aired_date']}")
+                    return False
+
+            MyAnimeListDataSetter.set_extracted_data(anime, url, extracted_data, parsed_date)
+            return True
+
+        except Exception as e:
+            logging.error(f"MyAnimeList HTML数据提取失败: {e}")
+            return False
+
+    def _fetch_web_search_candidate_rows(self, processed_name: str) -> Optional[list]:
+        """获取MAL网页搜索候选行"""
+        keyword_encoded = quote(processed_name)
+        search_url = f"https://myanimelist.net/anime.php?q={keyword_encoded}&cat=anime"
+        response = fetch_data_with_retry(search_url)
+
+        if not response or response.status_code != 200:
+            logging.warning("MyAnimeList网页搜索请求失败")
+            return None
+
+        try:
+            mal_tree = html.fromstring(response.content)
+            candidate_elements = mal_tree.xpath(
+                "//table[@border='0' and @cellpadding='0' and @cellspacing='0' and @width='100%']/tr"
+            )
+        except Exception as e:
+            logging.error(f"MyAnimeList网页搜索结果解析失败: {e}")
+            return None
+
+        if not candidate_elements or len(candidate_elements) <= 1:
+            logging.warning("MyAnimeList网页搜索未找到搜索结果")
+            return None
+
+        return candidate_elements[1:]
+
+    def _build_web_url(self, identifier: str) -> Optional[str]:
+        """从URL或anime ID构造MAL网页详情URL"""
+        if not identifier:
+            return None
+
+        identifier = str(identifier).strip()
+        if identifier.isdigit():
+            return f"https://myanimelist.net/anime/{identifier}"
+
+        return LinkParser.extract_myanimelist_url(identifier)
+
+    def _extract_anime_id(self, identifier: str) -> Optional[int]:
+        """从URL或纯ID中提取MAL anime ID"""
+        if not identifier:
+            return None
+
+        identifier = str(identifier).strip()
+        anime_id = identifier if identifier.isdigit() else LinkParser.extract_myanimelist_id(identifier)
+        if not anime_id:
+            return None
+
+        try:
+            return int(anime_id)
+        except (TypeError, ValueError):
+            return None
 
     def _get_headers(self) -> Optional[Dict[str, str]]:
         config = get_myanimelist_api_config()
@@ -117,8 +257,8 @@ class MyAnimeListExtractor(BaseExtractor):
             logging.error(f"MyAnimeList条目 {anime_id} JSON解析失败: {e}")
             return None
 
-    def _search_candidates(self, processed_name: str) -> Optional[list]:
-        """搜索候选条目"""
+    def _search_api_candidates(self, processed_name: str) -> Optional[list]:
+        """使用官方API搜索候选条目"""
         headers = self._get_headers()
         if not headers:
             return None
@@ -152,29 +292,12 @@ class MyAnimeListExtractor(BaseExtractor):
         MAL官方API的搜索端点对部分日文标题召回较差；这里仅从网页搜索结果
         提取条目链接/ID，评分、人数、日期仍统一由官方API详情接口获取。
         """
-        keyword_encoded = quote(processed_name)
-        search_url = f"https://myanimelist.net/anime.php?q={keyword_encoded}&cat=anime"
-        response = fetch_data_with_retry(search_url)
-
-        if not response or response.status_code != 200:
-            logging.warning("MyAnimeList网页搜索请求失败")
-            return None
-
-        try:
-            mal_tree = html.fromstring(response.content)
-            candidate_elements = mal_tree.xpath(
-                "//table[@border='0' and @cellpadding='0' and @cellspacing='0' and @width='100%']/tr"
-            )
-        except Exception as e:
-            logging.error(f"MyAnimeList网页搜索结果解析失败: {e}")
-            return None
-
-        if not candidate_elements or len(candidate_elements) <= 1:
-            logging.warning("MyAnimeList网页搜索未找到搜索结果")
+        candidate_elements = self._fetch_web_search_candidate_rows(processed_name)
+        if not candidate_elements:
             return None
 
         candidates = []
-        for candidate in candidate_elements[1:]:
+        for candidate in candidate_elements:
             href_values = candidate.xpath(".//div[1]/a[1]/@href")
             if not href_values:
                 continue
@@ -186,8 +309,68 @@ class MyAnimeListExtractor(BaseExtractor):
 
         return candidates
 
-    def _extract_candidate_info(self, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """提取候选条目信息"""
+    def _extract_web_candidate_info(self, candidate) -> Optional[Dict[str, Any]]:
+        """提取网页搜索候选条目信息，详情数据API优先、HTML兜底"""
+        try:
+            anime_href_element = candidate.xpath(".//div[1]/a[1]")[0]
+        except IndexError:
+            return None
+
+        candidate_href = anime_href_element.get('href')
+        if not candidate_href:
+            return None
+
+        return self._build_candidate_info_from_web_url(candidate_href)
+
+    def _build_candidate_info_from_web_url(self, candidate_href: str) -> Optional[Dict[str, Any]]:
+        """从MAL网页候选URL构建候选信息，优先使用API详情"""
+        anime_id = self._extract_anime_id(candidate_href)
+        if anime_id:
+            api_data = self._fetch_anime_details(anime_id)
+            if api_data:
+                api_data["_mal_url"] = candidate_href
+                candidate_info = self._build_candidate_info(api_data)
+                if candidate_info:
+                    return candidate_info
+
+                logging.warning(f"MyAnimeList API详情缺少可验证数据，回退到网页详情解析: {candidate_href}")
+
+        return self._build_html_candidate_info(candidate_href)
+
+    def _build_html_candidate_info(self, candidate_href: str) -> Optional[Dict[str, Any]]:
+        """从MAL详情页HTML构建候选信息"""
+        response = fetch_data_with_retry(candidate_href)
+        if not response or response.status_code != 200:
+            logging.warning(f"MyAnimeList候选条目 {candidate_href} 页面请求失败")
+            return None
+
+        html_content = response.text
+        temp_name = MyAnimeListParser.extract_japanese_name(html_content) or "未知名称"
+        aired_date_str = MyAnimeListParser.extract_aired_date(html_content)
+
+        if not aired_date_str:
+            logging.info(f"MyAnimeList候选条目 {candidate_href} 没有可验证的开播日期")
+            return None
+
+        parsed_date = MyAnimeListDateProcessor.parse(aired_date_str)
+        if not parsed_date:
+            logging.info(f"MyAnimeList候选条目 {candidate_href} 日期格式不匹配: {aired_date_str}")
+            return None
+
+        return {
+            'name': temp_name,
+            'year': parsed_date[:4],
+            'id': candidate_href,
+            'date': parsed_date,
+            'data': {
+                '_source': 'html',
+                'html': html_content,
+                'parsed_date': parsed_date,
+            },
+        }
+
+    def _extract_api_candidate_info(self, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """提取API候选条目信息"""
         node = candidate.get("node") if isinstance(candidate, dict) else None
         if not isinstance(node, dict):
             return None
@@ -206,11 +389,15 @@ class MyAnimeListExtractor(BaseExtractor):
 
         return self._build_candidate_info(api_data)
 
-    def _extract_web_candidate_info(self, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """使用网页搜索得到的anime ID调用官方API详情并生成候选信息"""
+    def _extract_web_id_candidate_info(self, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """使用网页搜索得到的anime ID生成候选信息，API详情优先、HTML兜底"""
         candidate_id = candidate.get("id") if isinstance(candidate, dict) else None
         if not candidate_id:
             return None
+
+        candidate_url = candidate.get("url")
+        if candidate_url:
+            return self._build_candidate_info_from_web_url(candidate_url)
 
         try:
             anime_id = int(candidate_id)
@@ -220,10 +407,6 @@ class MyAnimeListExtractor(BaseExtractor):
         api_data = self._fetch_anime_details(anime_id)
         if not api_data:
             return None
-
-        candidate_url = candidate.get("url")
-        if candidate_url:
-            api_data["_mal_url"] = candidate_url
 
         return self._build_candidate_info(api_data)
 
@@ -417,7 +600,7 @@ def extract_myanimelist_data_by_url(anime, candidate_href):
 
 def extract_myanimelist_data_by_search(anime, processed_name):
     """
-    通过搜索从MyAnimeList官方API提取动画评分
+    通过搜索从MyAnimeList提取动画评分（网页搜索优先，API搜索兜底）
     Args:
         anime: Anime对象
         processed_name: 预处理后的名称

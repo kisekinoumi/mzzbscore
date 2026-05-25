@@ -34,7 +34,7 @@ MZZB Score 是一个动画评分聚合工具，能够自动从多个知名动画
    - **可选**：预填各平台URL列（`Bangumi_url`、`Anilist_url`、`Myanimelist_url`、`Filmarks_url`），程序将优先使用这些链接直接提取数据
 2. 运行程序，程序会自动执行以下流程：
    - 自动检测和配置网络代理
-   - 使用内置 MyAnimeList 官方 API Client ID（也可通过环境变量覆盖）
+   - 使用内置 MyAnimeList 官方 API Client ID 获取条目详情数据（也可通过环境变量覆盖）
    - 配置Twitter功能（可选，支持跳过）
    - 检查每行是否已有平台链接
    - 对于有链接的平台，直接从链接提取数据（快速准确）
@@ -54,7 +54,7 @@ MZZB Score 是一个动画评分聚合工具，能够自动从多个知名动画
    - 智能降级策略：代理可用→使用代理，代理不可用→测试直连，直连可用→使用直连，直连不可用→禁用Twitter功能
    - 配置完成后，所有网络请求都将使用检测到的代理配置
    - 保存Twitter网络可用性状态供后续使用
-3. **MyAnimeList API配置**：默认使用程序内置 Client ID；如设置了 `MAL_CLIENT_ID` 环境变量，则优先使用环境变量
+3. **MyAnimeList API配置**：默认使用程序内置 Client ID，用于MAL条目详情数据获取；如设置了 `MAL_CLIENT_ID` 环境变量，则优先使用环境变量
 4. **Twitter配置**：交互式配置Twitter粉丝数获取功能
    - 读取之前保存的Twitter网络可用性状态
    - 如果网络可用，进行Twitter账号配置
@@ -89,13 +89,13 @@ MZZB Score 是一个动画评分聚合工具，能够自动从多个知名动画
 - **双模式数据获取**：
   - 链接模式：直接从Excel中的URL链接提取数据，速度快且准确
   - 搜索模式：当没有链接时，通过名称搜索获取数据
-- **MyAnimeList搜索兜底**：优先使用官方API搜索；当官方API搜索无法召回正确条目时，仅使用MAL网页搜索定位anime ID，再通过官方API详情接口读取评分、人数和日期
+- **MyAnimeList网页搜索/API详情**：优先使用MAL网页搜索定位候选条目，API搜索作为兜底；条目详情数据优先使用官方API获取，网页详情HTML解析作为兜底
 - **Filmarks API提取**：优先使用Filmarks移动端API搜索和详情接口读取评分、评分人数和日期；API失败时回退到原网页解析逻辑
 - **并发数据获取**：使用ThreadPoolExecutor同时从四个网站获取数据，提高处理效率
 - **统一的提取器架构**：所有平台提取器都基于BaseExtractor，确保一致的行为和错误处理
 - 自动从以下网站获取动画评分数据：
   - **Bangumi (番组计划)**：使用官方API，支持subject ID直接提取。
-  - **MyAnimeList (MAL)**：使用官方API，支持完整URL/anime ID直接提取，网页解析作为兜底。
+  - **MyAnimeList (MAL)**：网页搜索优先、API搜索兜底；详情数据API优先、网页HTML解析兜底，支持完整URL/anime ID直接提取。
   - **AniList (AL)**：使用官方GraphQL API，支持anime ID直接提取。
   - **Filmarks (FM)**：优先使用移动端API，支持完整URL/season ID直接提取，网页解析作为兜底。
 - **评分标准化**：自动转换不同平台的评分制度（如AniList的百分制转为十分制）。
@@ -130,7 +130,7 @@ mzzbscore/
 │   ├── parsers/               # 业务专用解析器
 │   │   ├── __init__.py        # 解析器导出接口
 │   │   ├── base_parser.py     # 基础解析器类
-│   │   ├── myanimelist_parser.py  # MAL API响应解析器
+│   │   ├── myanimelist_parser.py  # MAL HTML/API响应解析器
 │   │   ├── filmarks_parser.py # Filmarks页面解析器
 │   │   ├── twitter_parser.py  # Twitter数据解析器
 │   │   └── link_parser.py     # 链接解析和ID提取器
