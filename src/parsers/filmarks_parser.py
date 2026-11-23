@@ -1,213 +1,182 @@
 """
-Filmarks解析器
+Filmarks解析器（支持移动端API响应解析 + 网页详情解析 + 网页多候选搜索解析）
 """
 
-import re
 import json
-from typing import Optional, Dict, Any
+import logging
+import re
+from typing import Any, Dict, List, Optional
+
 from lxml import html
+
+from utils.date.date_processors import FilmarksDateProcessor
+
 from .base_parser import HtmlParser
+
+_WEB_ANIME_HREF_RE = re.compile(r"/animes/(\d+)/(\d+)")
 
 
 class FilmarksParser(HtmlParser):
-    """Filmarks页面解析器"""
-    
+    """Filmarks网页解析器"""
+
     def __init__(self):
         super().__init__("Filmarks")
-    
+
     def parse(self, content: str) -> Dict[str, Any]:
-        """
-        解析Filmarks页面内容
-        Args:
-            content: HTML内容
-        Returns:
-            dict: 解析结果
-        """
+        """解析Filmarks页面内容（详情页或搜索页首个结果兼容入口）"""
         tree = html.fromstring(content)
-        
-        # 判断是详情页还是搜索页
         if self._is_detail_page(tree):
             return self._parse_detail_page(tree)
-        else:
-            return self._parse_search_page(tree)
-    
-    def _is_detail_page(self, tree) -> bool:
-        """判断是否为详情页"""
-        # 详情页有特定的标题元素
+        candidates = self._parse_search_cassettes(tree, limit=1)
+        if candidates:
+            return candidates[0]
+        return {"score": None, "name": None, "total": None, "date": None}
+
+    def parse_search_candidates(self, content: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """解析Filmarks搜索页中的所有候选 js-cassette 列表，提取真实 /animes/{series}/{season} 链接"""
+        if not content:
+            return []
+        try:
+            tree = html.fromstring(content)
+        except Exception as e:
+            self.log_error(f"解析Filmarks搜索HTML失败: {e}")
+            return []
+        return self._parse_search_cassettes(tree, limit=limit)
+
+    @staticmethod
+    def _is_detail_page(tree) -> bool:
         title_elements = tree.xpath('//h2[@class="p-content-detail__title"]')
         return bool(title_elements)
-    
+
     def _parse_detail_page(self, tree) -> Dict[str, Any]:
-        """
-        解析详情页
-        Args:
-            tree: HTML树
-        Returns:
-            dict: 解析结果
-        """
-        result = {
-            'score': None,
-            'name': None,
-            'total': None,
-            'date': None
+        result: Dict[str, Any] = {
+            "score": None,
+            "name": None,
+            "total": None,
+            "date": None,
+            "year": None,
         }
-        
-        # 提取评分
+
         score_elements = tree.xpath('//div[@class="c2-rating-l__text"]/text()')
         if score_elements:
-            result['score'] = score_elements[0].strip()
-            self.log_info(f"提取到评分: {result['score']}")
-        else:
-            self.log_warning("未找到评分")
-        
-        # 提取名称
+            score_text = score_elements[0].strip()
+            if score_text and score_text != "-":
+                result["score"] = score_text
+
         name_elements = tree.xpath('//h2[@class="p-content-detail__title"]/span/text()')
+        if not name_elements:
+            name_elements = tree.xpath('//h2[@class="p-content-detail__title"]/text()')
         if name_elements:
-            result['name'] = name_elements[0].strip()
-            self.log_info(f"提取到名称: {result['name']}")
-        else:
-            self.log_warning("未找到名称")
-        
-        # 提取评分人数
-        data_mark_elements = tree.xpath('//div[@class="js-btn-mark"]/@data-mark')
+            result["name"] = name_elements[0].strip()
+
+        data_mark_elements = tree.xpath('//div[contains(@class, "js-btn-mark")]/@data-mark')
         if data_mark_elements:
             try:
-                data_mark_json = data_mark_elements[0].replace('&quot;', '"')
+                data_mark_json = data_mark_elements[0].replace("&quot;", '"')
                 data_mark = json.loads(data_mark_json)
-                result['total'] = str(data_mark.get('count', 'No count found'))
-                self.log_info(f"提取到评分人数: {result['total']}")
-            except (json.JSONDecodeError, KeyError) as e:
+                if "count" in data_mark:
+                    result["total"] = str(data_mark["count"])
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
                 self.log_error(f"解析评分人数失败: {e}")
-        else:
-            self.log_warning("未找到评分人数")
-        
-        # 提取开播日期
-        date_elements = tree.xpath('//div[@class="p-content-detail__other-info"]//h3[@class="p-content-detail__other-info-title"][contains(text(), "公開日")]/text()')
-        if date_elements:
-            date_text = date_elements[0].strip()
-            result['date'] = self._extract_date_from_text(date_text)
-            if result['date']:
-                self.log_info(f"提取到开播日期: {result['date']}")
-        else:
-            self.log_warning("未找到开播日期")
-        
+
+        date_elements = tree.xpath(
+            '//div[contains(@class, "p-content-detail__other-info")]'
+            '//*[contains(text(), "公開日")]/..//text() | '
+            '//div[contains(@class, "p-content-detail__other-info")]'
+            '//h3[contains(@class, "p-content-detail__other-info-title")][contains(text(), "公開日")]/text()'
+        )
+        for raw_text in date_elements:
+            parsed = self._extract_date_from_text(raw_text.strip())
+            if parsed:
+                result["date"] = parsed
+                result["year"] = parsed[:4]
+                break
+
         return result
-    
-    def _parse_search_page(self, tree) -> Dict[str, Any]:
-        """
-        解析搜索页
-        Args:
-            tree: HTML树
-        Returns:
-            dict: 解析结果
-        """
-        result = {
-            'score': None,
-            'name': None,
-            'total': None,
-            'date': None
-        }
-        
-        # 定位第一个搜索结果
-        first_result = tree.xpath('//div[contains(@class, "js-cassette")][1]')
-        
-        if not first_result:
-            self.log_warning("未找到搜索结果")
-            return result
-        
-        first_cassette = first_result[0]
-        
-        # 在第一个搜索结果中查找评分
-        score_elements = first_cassette.xpath(
-            './/div[@class="c-rating__score"]//text() | '
-            './/*[contains(@class, "score")]//text() | '
-            './/*[contains(@class, "rating")]//text()'
-        )
-        
-        if score_elements:
-            for score_text in score_elements:
-                score_text = score_text.strip()
-                # 匹配数字格式的评分（如 4.1, 3.5 等）
-                score_match = re.search(r'^(\d+\.?\d*)$', score_text)
-                if score_match and score_text != '-':
-                    result['score'] = score_match.group(1)
-                    self.log_info(f"提取到评分: {result['score']}")
+
+    def _parse_search_cassettes(self, tree, limit: int = 10) -> List[Dict[str, Any]]:
+        cassettes = tree.xpath('//div[contains(@class, "js-cassette")]')
+        if not cassettes:
+            self.log_warning("未找到Filmarks网页搜索结果")
+            return []
+
+        candidates: List[Dict[str, Any]] = []
+        for cassette in cassettes[:limit]:
+            season_id: Optional[str] = None
+            series_id: Optional[str] = None
+            for href in cassette.xpath(".//a/@href"):
+                m = _WEB_ANIME_HREF_RE.search(str(href))
+                if m:
+                    series_id, season_id = m.group(1), m.group(2)
                     break
-        else:
-            self.log_warning("未找到评分")
-        
-        # 在第一个搜索结果中查找名称
-        name_elements = first_cassette.xpath(
-            './/h3[@class="p-content-cassette__title"]//text() | '
-            './/*[contains(@class, "title") and not(contains(@class, "reviews-title"))]//text()'
-        )
-        
-        if name_elements:
+
+            name: Optional[str] = None
+            name_elements = cassette.xpath(
+                './/h3[@class="p-content-cassette__title"]//text() | '
+                './/*[contains(@class, "title") and not(contains(@class, "reviews-title"))]//text()'
+            )
             for name_text in name_elements:
                 clean_name = name_text.strip()
-                # 过滤掉太短的文本和无意义的文本
-                if clean_name and len(clean_name) > 3 and '検索' not in clean_name:
-                    result['name'] = clean_name
-                    self.log_info(f"提取到名称: {result['name']}")
+                if clean_name and "検索" not in clean_name:
+                    name = clean_name
                     break
-        else:
-            self.log_warning("未找到名称")
-        
-        # 获取评分人数
-        total_elements = first_cassette.xpath('.//@data-mark')
-        if total_elements:
-            try:
-                data_mark = json.loads(total_elements[0])
-                result['total'] = str(data_mark.get('count', 'No count found'))
-                self.log_info(f"提取到评分人数: {result['total']}")
-            except (json.JSONDecodeError, KeyError) as e:
-                self.log_error(f"解析评分人数失败: {e}")
-        else:
-            self.log_warning("未找到评分人数")
-        
-        # 在第一个搜索结果中查找日期信息
-        date_elements = first_cassette.xpath(
-            './/*[contains(text(), "年")]//text() | '
-            './/*[contains(@class, "date")]//text() | '
-            './/*[contains(@class, "other-info")]//text()'
-        )
-        
-        if date_elements:
+
+            score: Optional[str] = None
+            score_elements = cassette.xpath(
+                './/div[@class="c-rating__score"]//text() | '
+                './/*[contains(@class, "score")]//text() | '
+                './/*[contains(@class, "rating")]//text()'
+            )
+            for score_text in score_elements:
+                s_clean = score_text.strip()
+                m_s = re.search(r"^(\d+\.?\d*)$", s_clean)
+                if m_s and s_clean != "-":
+                    score = m_s.group(1)
+                    break
+
+            total: Optional[str] = None
+            total_elements = cassette.xpath(".//@data-mark")
+            for raw_mark in total_elements:
+                try:
+                    data_mark = json.loads(str(raw_mark).replace("&quot;", '"'))
+                    if isinstance(data_mark, dict) and "count" in data_mark:
+                        total = str(data_mark["count"])
+                        break
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    continue
+
+            date_yyyymm: Optional[str] = None
+            date_elements = cassette.xpath(
+                './/*[contains(text(), "年")]//text() | '
+                './/*[contains(@class, "date")]//text() | '
+                './/*[contains(@class, "other-info")]//text()'
+            )
             for date_text in date_elements:
-                date_str = date_text.strip()
-                extracted_date = self._extract_date_from_text(date_str)
+                extracted_date = self._extract_date_from_text(date_text.strip())
                 if extracted_date:
-                    result['date'] = extracted_date
-                    self.log_info(f"提取到开播日期: {result['date']}")
+                    date_yyyymm = extracted_date
                     break
-        else:
-            self.log_warning("未找到开播日期")
-        
-        return result
-    
-    def _extract_date_from_text(self, text: str) -> Optional[str]:
-        """
-        从文本中提取日期（YYYYMM格式）
-        Args:
-            text: 包含日期的文本
-        Returns:
-            str or None: YYYYMM格式的日期，未找到返回None
-        """
-        # 匹配 "YYYY年MM月" 格式
-        match = re.search(r'(\d{4})年(\d{2})月', text)
-        if match:
-            year = match.group(1)
-            month = match.group(2)
-            return year + month
-        
-        # 匹配其他可能的日期格式
-        match = re.search(r'(\d{4})-(\d{2})-\d{2}', text)
-        if match:
-            year = match.group(1)
-            month = match.group(2)
-            return year + month
-        
-        return None
+
+            candidates.append(
+                {
+                    "id": season_id,
+                    "series_id": series_id,
+                    "name": name,
+                    "original_name": name,
+                    "titles": [name] if name else [],
+                    "score": score,
+                    "total": total,
+                    "date": date_yyyymm,
+                    "year": date_yyyymm[:4] if date_yyyymm else None,
+                    "data": {},
+                }
+            )
+
+        return candidates
+
+    @staticmethod
+    def _extract_date_from_text(text: str) -> Optional[str]:
+        return FilmarksDateProcessor.parse(text)
 
 
 class FilmarksApiParser:
@@ -215,112 +184,114 @@ class FilmarksApiParser:
 
     @staticmethod
     def parse_search(data: Dict[str, Any]) -> list:
-        """解析搜索API响应，返回候选season列表"""
         if not isinstance(data, dict):
             return []
-        seasons = data.get('seasons')
+        seasons = data.get("seasons")
         return seasons if isinstance(seasons, list) else []
 
     @classmethod
     def parse_detail(cls, data: Dict[str, Any]) -> Dict[str, Any]:
-        """解析详情API响应"""
         if not isinstance(data, dict):
             return {}
-        season = data.get('season')
+        season = data.get("season")
         if not isinstance(season, dict):
             season = data
         return cls.parse_season(season)
 
     @staticmethod
     def parse_season(season: Dict[str, Any]) -> Dict[str, Any]:
-        """解析单个season对象"""
+        """解析单个season对象（兼容 ISO 时间戳与 YYYY-Qn 季度格式）"""
         if not isinstance(season, dict):
             return {}
 
-        season_id = season.get('id')
-        series_id = season.get('seriesId')
-        release_date = season.get('releaseDate') or season.get('releaseQuarter')
+        season_id = season.get("id")
+        series_id = season.get("seriesId") or season.get("series_id")
+        release_date_raw = season.get("releaseDate") or season.get("releaseQuarter")
+
+        title = (season.get("title") or "").strip()
+        original_title = (season.get("originalTitle") or "").strip()
+        titles = [t for t in (title, original_title) if t]
+
+        date_yyyymm = FilmarksDateProcessor.parse(str(release_date_raw)) if release_date_raw else None
+        iso_or_quarter: Optional[str] = None
+        if isinstance(release_date_raw, str):
+            r_str = release_date_raw.strip()
+            if re.match(r"^\d{4}-\d{2}-\d{2}", r_str):
+                iso_or_quarter = r_str[:10]
+            elif re.match(r"^\d{4}-Q[1-4]$", r_str, re.IGNORECASE):
+                iso_or_quarter = r_str.upper()
+
+        year_str = FilmarksApiParser._extract_year(season, date_yyyymm, iso_or_quarter)
 
         return {
-            'id': str(season_id) if season_id is not None else None,
-            'series_id': str(series_id) if series_id is not None else None,
-            'score': season.get('averageScore'),
-            'name': season.get('title'),
-            'total': season.get('markCount'),
-            'date': FilmarksApiParser._extract_date_from_api_value(release_date),
-            'year': FilmarksApiParser._extract_year(season, release_date),
-            'data': season,
+            "id": str(season_id) if season_id is not None else None,
+            "series_id": str(series_id) if series_id is not None else None,
+            "score": season.get("averageScore"),
+            "name": title or original_title or None,
+            "original_name": original_title,
+            "titles": titles,
+            "total": season.get("markCount"),
+            "date": date_yyyymm,
+            "release_date": iso_or_quarter,
+            "year": year_str,
+            "data": season,
         }
 
     @staticmethod
-    def _extract_date_from_api_value(date_value: Any) -> Optional[str]:
-        """从API日期值中提取YYYYMM"""
-        if not date_value:
-            return None
-
-        match = re.match(r'^(\d{4})-(\d{2})', str(date_value))
-        if match:
-            return match.group(1) + match.group(2)
-        return None
-
-    @staticmethod
-    def _extract_year(season: Dict[str, Any], release_date: Any) -> Optional[str]:
-        """提取候选条目的放送年份"""
-        production_year = season.get('productionYear')
+    def _extract_year(
+        season: Dict[str, Any],
+        date_yyyymm: Optional[str],
+        iso_or_quarter: Optional[str],
+    ) -> Optional[str]:
+        """优先从实际开播日期提取年份，缺失时回退到 productionYear（避免年末制作次年1月番年份偏差）"""
+        if date_yyyymm and len(date_yyyymm) >= 4:
+            return date_yyyymm[:4]
+        if iso_or_quarter and len(iso_or_quarter) >= 4:
+            return iso_or_quarter[:4]
+        production_year = season.get("productionYear")
         if production_year:
             return str(production_year)
-
-        date = FilmarksApiParser._extract_date_from_api_value(release_date)
-        if date:
-            return date[:4]
         return None
 
 
 class FilmarksDataSetter:
     """Filmarks数据设置器，负责将解析结果设置到Anime对象"""
-    
+
     @staticmethod
     def set_parsed_data(anime, url: str, parsed_data: Dict[str, Any]):
-        """
-        将解析的数据设置到Anime对象
-        Args:
-            anime: Anime对象
-            url: Filmarks URL
-            parsed_data: 解析结果
-        """
-        score = parsed_data.get('score')
-        total = parsed_data.get('total')
+        score = parsed_data.get("score")
+        total = parsed_data.get("total")
 
         anime.filmarks_url = url
-        anime.score_fm = str(score) if score is not None else 'No score found'
-        anime.filmarks_name = parsed_data.get('name') or 'No name found'
-        anime.filmarks_total = str(total) if total is not None else 'No count found'
-        
-        if parsed_data.get('date'):
-            anime.filmarks_subject_Date = parsed_data['date']
-        
-        # 记录日志
+        anime.score_fm = str(score) if score is not None else "No score found"
+        anime.filmarks_name = parsed_data.get("name") or "No name found"
+        anime.filmarks_original_name = parsed_data.get("original_name") or ""
+        anime.filmarks_total = str(total) if total is not None else "No count found"
+
+        parsed_date = parsed_data.get("date")
+        if parsed_date and len(str(parsed_date)) >= 6:
+            anime.filmarks_subject_Date = str(parsed_date)[:6]
+        release_iso = parsed_data.get("release_date")
+        if (
+            not anime.exact_start_date
+            and isinstance(release_iso, str)
+            and len(release_iso) >= 10
+            and "-Q" not in release_iso
+        ):
+            anime.exact_start_date = release_iso[:10]
+
         FilmarksDataSetter._log_extraction_results(anime)
-    
+
     @staticmethod
     def _log_extraction_results(anime):
-        """记录提取结果到日志"""
-        import logging
         logging.info(f"Filmarks链接: {anime.filmarks_url}")
         logging.info(f"Filmarks名称: {anime.filmarks_name}")
         logging.info(f"Filmarks评分: {anime.score_fm}")
         logging.info(f"Filmarks评分人数: {anime.filmarks_total}")
-        if hasattr(anime, 'filmarks_subject_Date') and anime.filmarks_subject_Date:
+        if hasattr(anime, "filmarks_subject_Date") and anime.filmarks_subject_Date:
             logging.info(f"Filmarks开播日期: {anime.filmarks_subject_Date}")
-    
+
     @staticmethod
     def set_error_state(anime, error_message: str):
-        """
-        设置错误状态
-        Args:
-            anime: Anime对象
-            error_message: 错误信息
-        """
         anime.score_fm = error_message
-        import logging
-        logging.error(f"Filmarks数据提取失败: {error_message}") 
+        logging.error(f"Filmarks数据提取失败: {error_message}")

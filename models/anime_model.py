@@ -1,13 +1,35 @@
 # models/anime_model.py
 # 存放动画数据模型定义
 
+
 class Anime:
-    def __init__(self, original_name, score_bgm='', score_al='', score_mal='', score_fm='',
-                 bangumi_url='', anilist_url='', myanimelist_url='', filmarks_url='',
-                 bangumi_name='', anilist_name='', myanimelist_name='', filmarks_name='',
-                 bangumi_total='', anilist_total='', myanimelist_total='', filmarks_total='',
-                 bangumi_subject_Date='', myanimelist_subject_Date='', anilist_subject_Date='',
-                 filmarks_subject_Date='', twitter_username='', twitter_url='', twitter_followers=''):
+    def __init__(
+        self,
+        original_name,
+        score_bgm="",
+        score_al="",
+        score_mal="",
+        score_fm="",
+        bangumi_url="",
+        anilist_url="",
+        myanimelist_url="",
+        filmarks_url="",
+        bangumi_name="",
+        anilist_name="",
+        myanimelist_name="",
+        filmarks_name="",
+        bangumi_total="",
+        anilist_total="",
+        myanimelist_total="",
+        filmarks_total="",
+        bangumi_subject_Date="",
+        myanimelist_subject_Date="",
+        anilist_subject_Date="",
+        filmarks_subject_Date="",
+        twitter_username="",
+        twitter_url="",
+        twitter_followers="",
+    ):
         self.original_name = original_name  # 原始名称
         self.score_bgm = score_bgm  # Bangumi 评分
         self.score_al = score_al  # AniList 评分
@@ -17,16 +39,22 @@ class Anime:
         self.anilist_url = anilist_url  # AniList 条目链接
         self.myanimelist_url = myanimelist_url  # MyAnimeList 条目链接
         self.filmarks_url = filmarks_url  # Filmarks 条目链接
-        self.bangumi_name = bangumi_name  # Bangumi 名称
-        self.anilist_name = anilist_name  # AniList 名称
-        self.myanimelist_name = myanimelist_name  # MyAnimeList 名称
-        self.filmarks_name = filmarks_name  # Filmarks 名称
+        self.bangumi_name = bangumi_name  # Bangumi 日文原名
+        self.bangumi_chinese_name = ""  # Bangumi 中文译名 (name_cn)
+        self.anilist_name = anilist_name  # AniList 展示名称
+        self.myanimelist_name = myanimelist_name  # MyAnimeList 展示名称
+        self.filmarks_name = filmarks_name  # Filmarks 展示名称
         self.anilist_japanese_name = anilist_name  # AniList 日文名称
+        self.anilist_romaji_name = ""  # AniList 罗马音名称
         self.anilist_english_name = ""  # AniList 英文名称
         self.myanimelist_japanese_name = myanimelist_name  # MyAnimeList 日文名称
         self.myanimelist_english_name = ""  # MyAnimeList 英文名称
+        self.filmarks_original_name = ""  # Filmarks 原始/外文标题
+        self.id_mal = ""  # AniList 返回的官方关联 MAL ID
+        self.exact_start_date = ""  # 精确开播日 YYYY-MM-DD（用于跨站校验）
+        self.episodes = None  # 动画话数（用于单集/长篇区分）
         self.bangumi_total = bangumi_total  # Bangumi 评分人数
-        self.anilist_total = anilist_total  # AniList 人气/评分人数
+        self.anilist_total = anilist_total  # AniList 评分人数
         self.myanimelist_total = myanimelist_total  # MyAnimeList 评分人数
         self.filmarks_total = filmarks_total  # Filmarks 评分人数
         # 开播日期统一格式为 "YYYYMM"
@@ -40,10 +68,12 @@ class Anime:
         self.twitter_followers = twitter_followers  # Twitter粉丝数
 
     def __str__(self):
-        return (f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
-                f"MAL: {self.score_mal}, FM: {self.score_fm}, "
-                f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
-                f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.filmarks_name}, "
-                f"StartDates: BGM:{self.bangumi_subject_Date}, MAL:{self.myanimelist_subject_Date}, "
-                f"AL:{self.anilist_subject_Date}, FM:{self.filmarks_subject_Date}, "
-                f"Twitter: @{self.twitter_username} ({self.twitter_url}) Followers: {self.twitter_followers})")
+        return (
+            f"Anime({self.original_name}, BGM: {self.score_bgm}, AL: {self.score_al}, "
+            f"MAL: {self.score_mal}, FM: {self.score_fm}, "
+            f"URLs: {self.bangumi_url}, {self.anilist_url}, {self.myanimelist_url}, {self.filmarks_url}, "
+            f"Names: {self.bangumi_name}, {self.anilist_name}, {self.myanimelist_name}, {self.filmarks_name}, "
+            f"StartDates: BGM:{self.bangumi_subject_Date}, MAL:{self.myanimelist_subject_Date}, "
+            f"AL:{self.anilist_subject_Date}, FM:{self.filmarks_subject_Date}, "
+            f"Twitter: @{self.twitter_username} ({self.twitter_url}) Followers: {self.twitter_followers})"
+        )

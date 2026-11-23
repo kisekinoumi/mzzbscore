@@ -224,6 +224,30 @@ class TwitterFollowersAPI:
         return None
 
 
+    def close(self) -> None:
+        """主动释放 Scweet 内部连接及数据库句柄，避免退出清理 scweet_state.db 时出现文件占用"""
+        scweet_obj = self._scweet
+        self._scweet = None
+        self.is_initialized = False
+        if scweet_obj is None:
+            return
+        for method_name in ("close", "shutdown", "cleanup"):
+            closer = getattr(scweet_obj, method_name, None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+        for attr_name in ("db", "_db", "state_db", "conn", "_conn", "storage", "_storage"):
+            sub = getattr(scweet_obj, attr_name, None)
+            if sub is not None and hasattr(sub, "close"):
+                try:
+                    sub.close()
+                except Exception:
+                    pass
+        del scweet_obj
+
+
 class TwitterFollowersHelper:
     """Twitter粉丝数获取助手类（单例工厂 + 格式化工具）"""
 
@@ -266,8 +290,18 @@ class TwitterFollowersHelper:
     @classmethod
     def reset_instance(cls) -> None:
         """重置 API 实例（配置变更后调用）"""
+        if cls._api_instance is not None:
+            cls._api_instance.close()
         cls._api_instance = None
         logging.debug("TwitterFollowersAPI 实例已重置")
+
+    @classmethod
+    def close(cls) -> None:
+        """释放单例所持有的 Scweet / SQLite 句柄"""
+        cls.reset_instance()
+        import gc
+
+        gc.collect()
 
     @classmethod
     def get_followers_count(cls, username: str) -> Optional[int]:

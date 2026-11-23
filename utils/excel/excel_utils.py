@@ -1,24 +1,21 @@
-# utils/excel_utils.py
+# utils/excel/excel_utils.py
 # Excel操作相关的工具函数
 
 import logging
+import re
+
+from .excel_columns import ExcelColumns
 
 
 class ExcelColumnHelper:
     """Excel列定位助手，支持通过列名定位列位置"""
-    
+
     def __init__(self, ws, header_row=2):
-        """
-        初始化列定位助手
-        Args:
-            ws: openpyxl worksheet对象
-            header_row: 表头所在行号（默认第2行）
-        """
         self.ws = ws
         self.header_row = header_row
         self.columns = {}
         self._build_column_mapping()
-    
+
     def _build_column_mapping(self):
         """构建列名到列索引的映射"""
         try:
@@ -29,37 +26,17 @@ class ExcelColumnHelper:
             logging.info(f"成功映射 {len(self.columns)} 个Excel列")
         except Exception as e:
             logging.error(f"构建列映射时出错: {e}")
-    
+
     def get_col_index(self, column_name):
-        """
-        获取列索引，支持容错
-        Args:
-            column_name: 列名
-        Returns:
-            int or None: 列索引，如果列不存在返回None
-        """
+        """获取列索引，如果列不存在返回None"""
         return self.columns.get(column_name.strip())
-    
+
     def has_column(self, column_name):
-        """
-        检查列是否存在
-        Args:
-            column_name: 列名
-        Returns:
-            bool: 列是否存在
-        """
+        """检查列是否存在"""
         return column_name.strip() in self.columns
-    
+
     def safe_write(self, row, column_name, value):
-        """
-        安全写入数据到指定列
-        Args:
-            row: Excel行对象
-            column_name: 列名
-            value: 要写入的值
-        Returns:
-            bool: 是否写入成功
-        """
+        """安全写入数据到指定列"""
         col_idx = self.get_col_index(column_name)
         if col_idx is not None:
             try:
@@ -71,25 +48,14 @@ class ExcelColumnHelper:
         else:
             logging.warning(f"列 '{column_name}' 不存在，跳过写入")
             return False
-    
+
     def safe_write_hyperlink(self, row_num, column_name, url, display_text=None):
-        """
-        安全写入超链接到指定列
-        Args:
-            row_num: 行号
-            column_name: 列名
-            url: 链接地址
-            display_text: 可选的显示文本，如果不提供则使用URL作为显示文本
-        Returns:
-            bool: 是否写入成功
-        """
+        """安全写入超链接到指定列"""
         col_idx = self.get_col_index(column_name)
         if col_idx is not None and url:
             try:
-                # openpyxl中列索引从1开始，但我们的索引从0开始，所以要+1
                 cell = self.ws.cell(row=row_num, column=col_idx + 1)
                 cell.hyperlink = url
-                # 设置显示文本，如果没有提供则使用URL
                 cell.value = display_text if display_text else url
                 return True
             except Exception as e:
@@ -101,13 +67,42 @@ class ExcelColumnHelper:
             return False
 
 
+def get_template_version(ws, col_helper=None):
+    """
+    读取 Excel 模板版本号，兼容三套官方模板的不同列宽：
+    1. 优先读取 M1（标准 mzzb.xlsx）
+    2. 其次读取 Filmarks 列对应的第 1 行单元格（首月模板 L1 / 完结模板 R1）
+    3. 兜底扫描第 1 行中的 8 位 YYYYMMDD 版本整数
+    """
+    m1_val = ws["M1"].value
+    if isinstance(m1_val, int):
+        return m1_val
+    if isinstance(m1_val, str) and m1_val.strip().isdigit():
+        return int(m1_val.strip())
+
+    if col_helper is None:
+        col_helper = ExcelColumnHelper(ws)
+
+    fm_idx = col_helper.get_col_index(ExcelColumns.FILMARKS_SCORE)
+    if fm_idx is not None:
+        fm_header_val = ws.cell(row=1, column=fm_idx + 1).value
+        if isinstance(fm_header_val, int):
+            return fm_header_val
+        if isinstance(fm_header_val, str) and fm_header_val.strip().isdigit():
+            return int(fm_header_val.strip())
+
+    for col in range(1, min(ws.max_column + 1, 45)):
+        val = ws.cell(row=1, column=col).value
+        if isinstance(val, int) and 20200000 <= val <= 20991231:
+            return val
+        if isinstance(val, str) and re.fullmatch(r"20\d{6}", val.strip()):
+            return int(val.strip())
+
+    return m1_val
+
+
 def safe_write_cell(cell, value):
-    """
-    通用的安全写入单元格函数
-    Args:
-        cell: Excel单元格对象
-        value: 要写入的值
-    """
+    """通用的安全写入单元格函数"""
     try:
         cell.value = value if value is not None else None
     except Exception as e:
@@ -115,23 +110,18 @@ def safe_write_cell(cell, value):
 
 
 def get_workbook_info(file_path):
-    """
-    获取工作簿基本信息
-    Args:
-        file_path: Excel文件路径
-    Returns:
-        dict: 包含工作簿信息的字典
-    """
+    """获取工作簿基本信息"""
     try:
         from openpyxl import load_workbook
+
         wb = load_workbook(file_path)
         ws = wb.active
         return {
-            'worksheet_name': ws.title,
-            'max_row': ws.max_row,
-            'max_column': ws.max_column,
-            'target_year': str(ws['A1'].value)[:4] if ws['A1'].value else None
+            "worksheet_name": ws.title,
+            "max_row": ws.max_row,
+            "max_column": ws.max_column,
+            "target_year": str(ws["A1"].value)[:4] if ws["A1"].value else None,
         }
     except Exception as e:
         logging.error(f"获取工作簿信息时出错: {e}")
-        return {} 
+        return {}

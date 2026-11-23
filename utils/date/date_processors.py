@@ -1,39 +1,31 @@
-# utils/date_processors.py
+# utils/date/date_processors.py
 # 日期处理工具模块，提供各平台通用的日期处理逻辑
 
-import re
 import logging
-from typing import Optional, Dict, Any
+import re
+from typing import Any, Dict, Optional
 
 
 class DateProcessor:
     """日期处理器基类"""
-    
+
     @staticmethod
     def parse_date_to_yyyymm(date_str: str, date_format: str) -> Optional[str]:
-        """
-        将日期字符串解析为YYYYMM格式
-        Args:
-            date_str: 原始日期字符串
-            date_format: 日期格式类型
-        Returns:
-            str or None: YYYYMM格式的日期字符串，解析失败返回None
-        """
+        """将日期字符串解析为YYYYMM格式"""
         if not date_str:
             return None
-            
+
         try:
             if date_format == "myanimelist":
                 return MyAnimeListDateProcessor.parse(date_str)
-            elif date_format == "bangumi":
+            if date_format == "bangumi":
                 return BangumiDateProcessor.parse(date_str)
-            elif date_format == "filmarks":
+            if date_format == "filmarks":
                 return FilmarksDateProcessor.parse(date_str)
-            elif date_format == "anilist":
+            if date_format == "anilist":
                 return AniListDateProcessor.parse(date_str)
-            else:
-                logging.warning(f"未知的日期格式类型: {date_format}")
-                return None
+            logging.warning(f"未知的日期格式类型: {date_format}")
+            return None
         except Exception as e:
             logging.error(f"日期解析失败 ({date_format}): {date_str} -> {e}")
             return None
@@ -41,107 +33,143 @@ class DateProcessor:
 
 class MyAnimeListDateProcessor:
     """MyAnimeList日期处理器"""
-    
-    # 月份英文缩写到数字的映射
+
     MONTH_MAP = {
-        "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04",
-        "May": "05", "Jun": "06", "Jul": "07", "Aug": "08",
-        "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"
+        "Jan": "01",
+        "Feb": "02",
+        "Mar": "03",
+        "Apr": "04",
+        "May": "05",
+        "Jun": "06",
+        "Jul": "07",
+        "Aug": "08",
+        "Sep": "09",
+        "Oct": "10",
+        "Nov": "11",
+        "Dec": "12",
     }
-    
+    SEASON_MAP = {
+        "winter": "01",
+        "spring": "04",
+        "summer": "07",
+        "fall": "10",
+        "autumn": "10",
+    }
+
     @classmethod
-    def parse(cls, aired_str: str) -> Optional[str]:
+    def parse(cls, aired_str: Optional[str]) -> Optional[str]:
         """
-        解析MyAnimeList的日期格式
-        Args:
-            aired_str: 如 "Jan 10, 2025 to ?"、"Jan 10, 2025" 或 API 的 "2025-01-10"
-        Returns:
-            str or None: YYYYMM格式，解析失败返回None
+        解析 MyAnimeList 日期格式为 YYYYMM（若仅有年份则返回 YYYY）：
+        支持 "2026-10-05"、"2026-10"、"Oct 5, 2026 to ?"、"Oct, 2026"、"Oct 2026"、"Fall 2026"、"2026"
         """
         if not aired_str:
             return None
 
-        api_match = re.match(r"^(\d{4})-(\d{2})", aired_str)
+        text = str(aired_str).strip()
+        api_match = re.match(r"^(\d{4})-(\d{2})", text)
         if api_match:
             return api_match.group(1) + api_match.group(2)
-            
-        # 用正则提取月份英文缩写和年份
-        match = re.search(r'([A-Za-z]{3})\s+\d{1,2},\s+(\d{4})', aired_str)
-        if match:
-            month_abbr = match.group(1)
-            year = match.group(2)
-            month = cls.MONTH_MAP.get(month_abbr, "00")
-            return year + month
+
+        match_full = re.search(r"\b([A-Za-z]{3})\s+\d{1,2},\s+((?:19|20)\d{2})\b", text)
+        if match_full:
+            month = cls.MONTH_MAP.get(match_full.group(1).title())
+            if month:
+                return match_full.group(2) + month
+
+        match_month_year = re.search(r"\b([A-Za-z]{3}),?\s+((?:19|20)\d{2})\b", text)
+        if match_month_year:
+            month = cls.MONTH_MAP.get(match_month_year.group(1).title())
+            if month:
+                return match_month_year.group(2) + month
+
+        match_season = re.search(
+            r"\b(winter|spring|summer|fall|autumn)\s+((?:19|20)\d{2})\b",
+            text,
+            re.IGNORECASE,
+        )
+        if match_season:
+            month = cls.SEASON_MAP.get(match_season.group(1).lower())
+            if month:
+                return match_season.group(2) + month
+
+        match_year_only = re.match(r"^((?:19|20)\d{2})(?:\s+to\b.*)?$", text, re.IGNORECASE)
+        if match_year_only:
+            return match_year_only.group(1)
+
         return None
 
 
 class BangumiDateProcessor:
     """Bangumi日期处理器"""
-    
-    @staticmethod
-    def parse(date_str: str) -> Optional[str]:
-        """
-        解析Bangumi的日期格式
-        Args:
-            date_str: 如 "2025-01-10"
-        Returns:
-            str or None: YYYYMM格式，解析失败返回None
-        """
+
+    JP_SEASON_MAP = {"冬": "01", "春": "04", "夏": "07", "秋": "10"}
+
+    @classmethod
+    def parse(cls, date_str: Optional[str]) -> Optional[str]:
+        """支持 '2026-10-05'、'2026-10'、'2026年10月5日'、'2026年4月'、'2026年秋'、'2026年' 等格式"""
         if not date_str:
             return None
-            
-        if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-            year = date_str[:4]
-            month = date_str[5:7]
-            return year + month
+        text = str(date_str).strip()
+        m_iso = re.match(r"^(\d{4})-(\d{1,2})", text)
+        if m_iso:
+            return f"{m_iso.group(1)}{int(m_iso.group(2)):02d}"
+        m_jp = re.search(r"((?:19|20)\d{2})\s*年\s*(\d{1,2})\s*月", text)
+        if m_jp:
+            return f"{m_jp.group(1)}{int(m_jp.group(2)):02d}"
+        m_season = re.search(r"((?:19|20)\d{2})\s*年\s*([春夏秋冬])", text)
+        if m_season:
+            return f"{m_season.group(1)}{cls.JP_SEASON_MAP[m_season.group(2)]}"
+        m_year = re.search(r"((?:19|20)\d{2})\s*年", text)
+        if m_year:
+            return m_year.group(1)
+        if re.fullmatch(r"(?:19|20)\d{2}", text):
+            return text
         return None
 
 
 class FilmarksDateProcessor:
     """Filmarks日期处理器"""
-    
-    @staticmethod
-    def parse(date_str: str) -> Optional[str]:
-        """
-        解析Filmarks的日期格式
-        Args:
-            date_str: 如 "公開日：2025年01月10日" 或 "2025年01月"
-        Returns:
-            str or None: YYYYMM格式，解析失败返回None
-        """
+
+    JP_SEASON_MAP = {"冬": "01", "春": "04", "夏": "07", "秋": "10"}
+
+    @classmethod
+    def parse(cls, date_str: Optional[str]) -> Optional[str]:
+        """支持 '2026年04月10日'、'2026年4月'、'2026-04-05'、'2026-Q4'、'2026年秋'、'2026年'"""
         if not date_str:
             return None
-            
-        # 匹配 "2025年01月" 格式
-        match = re.search(r'(\d{4})年(\d{2})月', date_str)
-        if match:
-            year = match.group(1)
-            month = match.group(2)
-            return year + month
+        text = str(date_str).strip()
+        m_iso = re.match(r"^(\d{4})-(\d{2})", text)
+        if m_iso:
+            return m_iso.group(1) + m_iso.group(2)
+        m_q = re.match(r"^(\d{4})-Q([1-4])$", text, re.IGNORECASE)
+        if m_q:
+            quarter_start_month = (int(m_q.group(2)) - 1) * 3 + 1
+            return f"{m_q.group(1)}{quarter_start_month:02d}"
+        m_jp = re.search(r"((?:19|20)\d{2})\s*年\s*(\d{1,2})\s*月", text)
+        if m_jp:
+            return f"{m_jp.group(1)}{int(m_jp.group(2)):02d}"
+        m_season = re.search(r"((?:19|20)\d{2})\s*年\s*([春夏秋冬])", text)
+        if m_season:
+            return f"{m_season.group(1)}{cls.JP_SEASON_MAP[m_season.group(2)]}"
+        m_year = re.search(r"((?:19|20)\d{2})\s*年", text)
+        if m_year:
+            return m_year.group(1)
+        if re.fullmatch(r"(?:19|20)\d{2}", text):
+            return text
         return None
 
 
 class AniListDateProcessor:
     """AniList日期处理器"""
-    
+
     @staticmethod
     def parse(start_date_obj: Dict[str, Any]) -> Optional[str]:
-        """
-        解析AniList的startDate对象
-        Args:
-            start_date_obj: 如 {"year": 2025, "month": 1}
-        Returns:
-            str or None: YYYYMM格式，解析失败返回None
-        """
         if not start_date_obj:
             return None
-            
-        year = start_date_obj.get('year')
+        year = start_date_obj.get("year")
         if not year:
             return None
-            
-        month = start_date_obj.get('month')
+        month = start_date_obj.get("month")
         if month:
-            return f"{year}{month:02d}"
-        else:
-            return str(year)
+            return f"{year}{int(month):02d}"
+        return str(year)
